@@ -3,6 +3,7 @@
 import { useChat, Chat } from "@ai-sdk/react";
 import { lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport } from "ai";
 import type { GermainUIMessage } from "@/lib/agents/germain";
+import type { GermainClientToolResult } from "@/lib/tools";
 import { deriveCase, initialCaseState } from "@/lib/case-derive";
 import { getDisplayStepIndex, deriveActionNeeded } from "@/lib/attache-display";
 import { ChatMessages } from "@/components/ChatMessages";
@@ -14,7 +15,7 @@ import { DocChecklist } from "@/components/console/DocChecklist";
 import { CaseFacts } from "@/components/console/CaseFacts";
 import { SplitFlap } from "@/components/console/SplitFlap";
 import { CautionLamp } from "@/components/console/CautionLamp";
-import { useState, useCallback, FormEvent, ChangeEvent, useMemo } from "react";
+import { useState, type FormEvent, type ChangeEvent, type KeyboardEvent, useMemo } from "react";
 
 // Create transport singleton
 const chatTransport = new DefaultChatTransport<GermainUIMessage>({
@@ -54,41 +55,69 @@ export default function GermainPage() {
   const hasMessages = messages.length > 0;
 
   // Handle tool output from client-interaction tools
-  const handleToolOutput = useCallback((toolCallId: string, tool: string, output: unknown) => {
-    addToolOutput({
-      toolCallId,
-      tool: tool as keyof typeof import("@/lib/tools").germainTools,
-      state: "output-available",
-      output: output as never,
-    });
-  }, [addToolOutput]);
+  const handleToolOutput = (result: GermainClientToolResult) => {
+    switch (result.tool) {
+      case "uploadDocuments":
+        addToolOutput({
+          toolCallId: result.toolCallId,
+          tool: "uploadDocuments",
+          state: "output-available",
+          output: result.output,
+        });
+        break;
+      case "payFees":
+        addToolOutput({
+          toolCallId: result.toolCallId,
+          tool: "payFees",
+          state: "output-available",
+          output: result.output,
+        });
+        break;
+      case "submitFiling":
+        addToolOutput({
+          toolCallId: result.toolCallId,
+          tool: "submitFiling",
+          state: "output-available",
+          output: result.output,
+        });
+        break;
+      case "provideMissingInsurance":
+        addToolOutput({
+          toolCallId: result.toolCallId,
+          tool: "provideMissingInsurance",
+          state: "output-available",
+          output: result.output,
+        });
+        break;
+    }
+  };
 
   // Handle input change
-  const handleInputChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-  }, []);
+  };
 
   // Handle suggestion click from empty state
-  const handleSuggestion = useCallback((text: string) => {
+  const handleSuggestion = (text: string) => {
     setInput(text);
     // Auto-submit after brief delay
     setTimeout(() => {
       sendMessage({ text });
       setInput("");
     }, 100);
-  }, [sendMessage]);
+  };
 
   // Handle form submission
-  const handleSubmit = useCallback((e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || busy) return;
 
     sendMessage({ text: input });
     setInput("");
-  }, [input, busy, sendMessage]);
+  };
 
   // Handle keydown for textarea
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (input.trim() && !busy) {
@@ -96,7 +125,7 @@ export default function GermainPage() {
         setInput("");
       }
     }
-  }, [input, busy, sendMessage]);
+  };
 
   return (
     <div className="flex h-screen overflow-hidden">

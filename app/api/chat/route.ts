@@ -15,18 +15,12 @@ export async function POST(req: Request) {
   // Create agent with current context
   const agent = createGermainAgent();
 
-  // Build enhanced instructions with current case state
-  const contextMessage = {
-    id: "system-context",
-    role: "system" as const,
-    createdAt: new Date(),
-    parts: [{ type: "text" as const, text: germainUserPrompt(caseState) }],
-  };
-  const enhancedMessages = [contextMessage, ...uiMessages];
-
   // Stream response using the agent
   return createAgentUIStreamResponse({
     agent,
-    uiMessages: enhancedMessages,
+    uiMessages,
+    options: {
+      caseContext: germainUserPrompt(caseState),
+    },
   });
 }

@@ -1,7 +1,7 @@
 // Pure display logic for the Attaché ops-console UI.
 // No React here — types from lib/germain-types.ts, message-part helpers from "ai".
 
-import { isToolUIPart, getToolName, type ToolUIPart } from "ai";
+import { isToolUIPart, getToolName } from "ai";
 import type { GermainUIMessage } from "./agents/germain";
 import type { CaseStatus, GermainCase, GermainDocument } from "./germain-types";
 
@@ -128,8 +128,7 @@ export const CLIENT_TOOLS = [
 // sets recommendation.resolved = true, so counting them would leave the lamp
 // permanently lit.
 export function deriveActionNeeded(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  messages: GermainUIMessage[] | any[],
+  messages: readonly GermainUIMessage[],
   caseState: GermainCase
 ): boolean {
   for (const message of messages) {
@@ -138,14 +137,12 @@ export function deriveActionNeeded(
     for (const part of message.parts ?? []) {
       if (!isToolUIPart(part)) continue;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const toolPart = part as ToolUIPart<any>;
-      const toolName = getToolName(toolPart);
+      const toolName = getToolName(part);
       if (!(CLIENT_TOOLS as readonly string[]).includes(toolName)) continue;
 
       // A client tool that hasn't produced output (and isn't errored) is
       // waiting on the user.
-      if (toolPart.state !== "output-available" && toolPart.state !== "output-error") {
+      if (part.state !== "output-available" && part.state !== "output-error") {
         return true;
       }
     }
