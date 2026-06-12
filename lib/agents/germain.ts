@@ -8,7 +8,7 @@ export type GermainUIMessage = InferAgentUIMessage<GermainAgent>;
 
 export function createGermainAgent(): GermainAgent {
   return new ToolLoopAgent({
-    model: gateway("minimax/minimax-m3"),
+    model: gateway("openai/gpt-5.4-mini"),
     instructions: germainSystemPrompt,
     tools: germainTools,
     stopWhen: [
