@@ -1,18 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { GermainCase } from "@/lib/germain-types";
 
 // ATC flight strip: applicant + case id + route + travel window.
 // Renders graceful placeholders pre-intake.
 export function CaseStrip({ caseState }: { caseState: GermainCase }) {
   // The case id is minted with Date.now() at module load, so the server and
-  // client disagree — only show it after mount to avoid a hydration mismatch.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // client can disagree during hydration.
 
   const shortId =
-    mounted && caseState.id
+    caseState.id
       ? caseState.id.replace(/^case-/, "").slice(-6).toUpperCase()
       : "——————";
   const name = caseState.applicant.fullName?.toUpperCase() ?? "—";
@@ -32,7 +29,9 @@ export function CaseStrip({ caseState }: { caseState: GermainCase }) {
 
   return (
     <div className="strip">
-      <div className="strip-call">CASE {shortId}</div>
+      <div className="strip-call" suppressHydrationWarning>
+        CASE {shortId}
+      </div>
       <div className="strip-route">{name}</div>
       <div className="strip-row">{visaRow}</div>
       <div className="strip-row">{datesRow}</div>

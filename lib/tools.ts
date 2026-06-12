@@ -321,7 +321,7 @@ Day 5 (${travelDetails.departureDate}): Departure`;
 export const runRiskReviewTool = tool({
   description: "Final risk assessment before submission. Analyzes all factors, calculates final approval likelihood, identifies any remaining high-impact fixes.",
   inputSchema: z.object({
-    caseData: z.record(z.any()).describe("Full case state including documents, financials, and previous recommendations"),
+    caseData: z.record(z.unknown()).describe("Full case state including documents, financials, and previous recommendations"),
   }),
   outputSchema: z.object({
     riskScore: z.number(),
@@ -484,12 +484,45 @@ export const trackDecisionTool = tool<TrackDecisionInput, TrackDecisionOutput>({
 // ==================== CLIENT-INTERACTION TOOLS ====================
 // These tools have NO execute function - they render UI and wait for user action
 
+const uploadDocumentsOutputSchema = z.object({
+  success: z.boolean(),
+  uploadedCount: z.number(),
+  documents: z.array(z.object({
+    id: z.string(),
+    type: z.string(),
+    name: z.string(),
+    status: z.literal("uploaded"),
+  })),
+});
+
+const payFeesOutputSchema = z.object({
+  success: z.boolean(),
+  paymentRef: z.string(),
+  amount: z.number(),
+  paidAt: z.string(),
+});
+
+const submitFilingOutputSchema = z.object({
+  success: z.boolean(),
+  approved: z.boolean(),
+  referenceNumber: z.string(),
+  submittedAt: z.string(),
+});
+
+const provideMissingInsuranceOutputSchema = z.object({
+  success: z.boolean(),
+  documentId: z.string(),
+  documentType: z.literal("insurance"),
+  verified: z.boolean(),
+});
+
 export const uploadDocumentsTool = tool({
   description: "UI tool: Prompt user to upload required documents. Displays document uploader interface and waits for uploads.",
   inputSchema: z.object({
     requiredTypes: z.array(z.enum(["passport", "bank_statement", "employment_letter", "insurance", "hotel_booking", "flight_itinerary", "invitation_letter", "property_deed"])),
     criticalDocuments: z.array(z.string()).describe("Document types that are critical and must be uploaded"),
   }),
+  outputSchema: uploadDocumentsOutputSchema,
   // No execute - client-side UI tool
 });
 
@@ -501,13 +534,14 @@ export const payFeesTool = tool({
     vacFee: z.number(),
     total: z.number(),
   }),
+  outputSchema: payFeesOutputSchema,
   // No execute - client-side UI tool
 });
 
 export const submitFilingTool = tool({
   description: "UI tool: HUMAN-IN-THE-LOOP approval gate. Display final application for user review and explicit approval before mock submission. Shows approval likelihood and requires explicit user confirmation.",
   inputSchema: z.object({
-    applicationSummary: z.record(z.any()).describe("Summary of application for user review"),
+    applicationSummary: z.record(z.unknown()).describe("Summary of application for user review"),
     approvalLikelihood: z.number(),
     finalRecommendations: z.array(z.object({
       issue: z.string(),
@@ -515,6 +549,7 @@ export const submitFilingTool = tool({
       impact: z.number(),
     })),
   }),
+  outputSchema: submitFilingOutputSchema,
   // No execute - client-side UI tool requiring user approval
 });
 
@@ -527,6 +562,7 @@ export const provideMissingInsuranceTool = tool({
     }),
     deadline: z.string(),
   }),
+  outputSchema: provideMissingInsuranceOutputSchema,
   // No execute - client-side UI tool for RFE response
 });
 
@@ -558,3 +594,14 @@ export const germainTools = {
 };
 
 export type GermainTools = typeof germainTools;
+export type GermainClientToolName = keyof typeof germainClientTools;
+export type UploadDocumentsOutput = z.infer<typeof uploadDocumentsOutputSchema>;
+export type PayFeesOutput = z.infer<typeof payFeesOutputSchema>;
+export type SubmitFilingOutput = z.infer<typeof submitFilingOutputSchema>;
+export type ProvideMissingInsuranceOutput = z.infer<typeof provideMissingInsuranceOutputSchema>;
+
+export type GermainClientToolResult =
+  | { tool: "uploadDocuments"; toolCallId: string; output: UploadDocumentsOutput }
+  | { tool: "payFees"; toolCallId: string; output: PayFeesOutput }
+  | { tool: "submitFiling"; toolCallId: string; output: SubmitFilingOutput }
+  | { tool: "provideMissingInsurance"; toolCallId: string; output: ProvideMissingInsuranceOutput };

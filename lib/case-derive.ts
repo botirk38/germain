@@ -1,9 +1,21 @@
-import { isToolUIPart, getToolName, type ToolUIPart } from "ai";
+import { isToolUIPart, getToolName } from "ai";
 import type { GermainUIMessage } from "./agents/germain";
 import type { GermainCase, Recommendation, CaseStatus, GermainDocument, GermainTimelineEvent } from "./germain-types";
 // Types are inferred from usage, no explicit import needed
 
 const BASE_APPROVAL_LIKELIHOOD = 35;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasRecordOutput(
+  part: NonNullable<GermainUIMessage["parts"]>[number]
+): part is Extract<NonNullable<GermainUIMessage["parts"]>[number], { state: "output-available" }> & {
+  output: Record<string, unknown>;
+} {
+  return isToolUIPart(part) && part.state === "output-available" && isRecord(part.output);
+}
 
 // Default empty case state
 export const initialCaseState: GermainCase = {
@@ -296,43 +308,28 @@ function applyToolOutput(
 
 // Main derive function: fold all tool outputs from messages into case state
 export function deriveCase(messages: GermainUIMessage[]): GermainCase {
-  let state = { ...initialCaseState };
+  const state = messages
+    .flatMap((message) => (message.role === "assistant" ? message.parts ?? [] : []))
+    .filter(hasRecordOutput)
+    .reduce<GermainCase>((currentState, part) => {
+      const toolName = getToolName(part);
+      const output = part.output;
+      const updatedState = { ...currentState, ...applyToolOutput(currentState, toolName, output) };
+      const nextStatus = deriveNextStatus(updatedState.status, toolName, output);
 
-  for (const message of messages) {
-    if (message.role !== "assistant") continue;
+      return nextStatus === updatedState.status
+        ? updatedState
+        : { ...updatedState, status: nextStatus };
+    }, { ...initialCaseState });
 
-    // Check for tool invocations in assistant messages using v6 API
-    for (const part of message.parts || []) {
-      if (!isToolUIPart(part)) continue;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const toolPart = part as ToolUIPart<any>;
-      const toolName = getToolName(toolPart);
-
-      // In v6, the tool part has state, input, output directly (not nested in toolCall)
-      // Only process completed tool calls with output
-      if (toolPart.state !== "output-available" || !toolPart.output) continue;
-
-      // Apply tool output to state
-      const updates = applyToolOutput(state, toolName, toolPart.output as Record<string, unknown>);
-      state = { ...state, ...updates };
-
-      // Update status
-      const nextStatus = deriveNextStatus(state.status, toolName, toolPart.output as Record<string, unknown>);
-      if (nextStatus !== state.status) {
-        state.status = nextStatus;
-      }
-    }
-  }
-
-  // Recalculate approval likelihood
-  state.approvalLikelihood = calculateApprovalLikelihood(
+  return {
+    ...state,
+    approvalLikelihood: calculateApprovalLikelihood(
     BASE_APPROVAL_LIKELIHOOD,
     state.recommendations,
     state.status
-  );
-
-  return state;
+    ),
+  };
 }
 
 // Get current step index for UI progress

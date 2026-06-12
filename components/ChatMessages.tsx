@@ -1,15 +1,16 @@
 "use client";
 
 import type { GermainUIMessage } from "@/lib/agents/germain";
-import { ToolCard } from "./ToolCard";
+import type { GermainClientToolResult } from "@/lib/tools";
+import { ToolPartRenderer } from "./ToolCard";
 import { Markdown } from "./attache/Markdown";
 import { Fragment } from "react";
-import { isToolUIPart, getToolName, type ToolUIPart } from "ai";
+import { isToolUIPart } from "ai";
 
 interface ChatMessagesProps {
   messages: GermainUIMessage[];
   status: string;
-  onToolOutput: (toolCallId: string, toolName: string, output: unknown) => void;
+  onToolOutput: (result: GermainClientToolResult) => void;
 }
 
 // Helper to extract text from message parts
@@ -46,24 +47,10 @@ export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesPro
                 {message.parts?.map((part, partIndex) => {
                   if (!isToolUIPart(part)) return null;
 
-                  // Use v6 helpers to extract tool info
-                  const toolName = getToolName(part);
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const toolPart = part as ToolUIPart<any>;
-
-                  // Tool state and data are directly on the part in v6
-                  const toolInvocation = {
-                    toolCallId: toolPart.toolCallId,
-                    toolName,
-                    state: toolPart.state as "input-streaming" | "input-available" | "output-available",
-                    input: toolPart.input,
-                    output: toolPart.output,
-                  };
-
                   return (
-                    <ToolCard
+                    <ToolPartRenderer
                       key={`${message.id}-tool-${partIndex}`}
-                      invocation={toolInvocation}
+                      part={part}
                       onOutput={onToolOutput}
                     />
                   );

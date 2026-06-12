@@ -44,12 +44,10 @@ function keysFor(type: string): string[] {
 // Strength of a filename↔type match: exact token hits weigh more than partials.
 function scorePair(filename: string, type: string): number {
   const toks = tokensOf(filename);
-  let s = 0;
-  for (const k of keysFor(type)) {
-    if (toks.includes(k)) s += 2;
-    else if (toks.some((t) => t.includes(k) || k.includes(t))) s += 1;
-  }
-  return s;
+  return keysFor(type).reduce((score, k) => {
+    if (toks.includes(k)) return score + 2;
+    return toks.some((t) => t.includes(k) || k.includes(t)) ? score + 1 : score;
+  }, 0);
 }
 
 export function FileUpload({
@@ -129,7 +127,7 @@ export function FileUpload({
   const submit = () => {
     const docs = requiredTypes
       .filter((t) => attached[t])
-      .map((type, i) => ({
+      .map((type) => ({
         id: `doc-${requiredTypes.indexOf(type)}`,
         type,
         name: attached[type],

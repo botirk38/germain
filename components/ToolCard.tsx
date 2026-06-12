@@ -1,7 +1,6 @@
 "use client";
 
-// Component only receives invocation via props, no need for message type
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Card, CardHead, CardFoot, ClRow } from "@/components/attache/Card";
 import { StatusMark } from "@/components/attache/StatusMark";
 import { KeyButton } from "@/components/attache/KeyButton";
@@ -9,26 +8,36 @@ import { MachinePanel } from "@/components/attache/MachinePanel";
 import { SlotBox } from "@/components/attache/SlotBox";
 import { FileUpload } from "@/components/attache/FileUpload";
 import { reviewStatusWord } from "@/lib/attache-display";
+import type { GermainUIMessage } from "@/lib/agents/germain";
+import type {
+  GermainClientToolName,
+  GermainClientToolResult,
+  PayFeesOutput,
+  ProvideMissingInsuranceOutput,
+  SubmitFilingOutput,
+  UploadDocumentsOutput,
+} from "@/lib/tools";
 
-interface ToolInvocation {
+type MessagePart = NonNullable<GermainUIMessage["parts"]>[number];
+type ToolState =
+  | "input-streaming"
+  | "input-available"
+  | "approval-requested"
+  | "approval-responded"
+  | "output-available"
+  | "output-error"
+  | "output-denied";
+type ToolPart<T extends string> = Extract<MessagePart, { type: `tool-${T}` }> & {
+  state: ToolState;
   toolCallId: string;
-  toolName: string;
-  state:
-    | "input-streaming"
-    | "input-available"
-    | "approval-requested"
-    | "approval-responded"
-    | "output-available"
-    | "output-error"
-    | "output-denied";
-  input?: Record<string, unknown>;
-  output?: Record<string, unknown>;
+  input?: unknown;
+  output?: unknown;
   errorText?: string;
-}
+};
 
-interface ToolCardProps {
-  invocation: ToolInvocation;
-  onOutput: (toolCallId: string, toolName: string, output: unknown) => void;
+interface ToolPartRendererProps {
+  part: MessagePart;
+  onOutput: (result: GermainClientToolResult) => void;
 }
 
 // Uppercase mono card headers — replaces the old icon map
@@ -49,13 +58,69 @@ const toolHeaders: Record<string, string> = {
   provideMissingInsurance: "RFE — INSURANCE REQUIRED",
 };
 
-// Client-interaction tools (no server execute)
-const clientInteractionTools = [
-  "uploadDocuments",
-  "payFees",
-  "submitFiling",
-  "provideMissingInsurance",
-];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringArrayField(input: unknown, key: string): string[] {
+  const value = isRecord(input) ? input[key] : undefined;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function numberField(input: Record<string, unknown>, key: string, fallback: number): number {
+  const value = input[key];
+  return typeof value === "number" ? value : fallback;
+}
+
+function stringField(input: Record<string, unknown>, key: string): string {
+  const value = input[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getClientToolOutput(
+  toolName: GermainClientToolName,
+  input: unknown
+): GermainClientToolResult["output"] {
+  switch (toolName) {
+    case "uploadDocuments": {
+      const requiredTypes = stringArrayField(input, "requiredTypes");
+      return {
+        success: true,
+        uploadedCount: requiredTypes.length || 3,
+        documents: requiredTypes.map((type, i) => ({
+          id: `doc-${i}`,
+          type,
+          name: `${type.replace("_", " ")}.pdf`,
+          status: "uploaded",
+        })),
+      };
+    }
+
+    case "payFees":
+      return {
+        success: true,
+        paymentRef: `PAY-${Date.now()}`,
+        amount: isRecord(input) ? numberField(input, "total", 120) : 120,
+        paidAt: new Date().toISOString(),
+      };
+
+    case "submitFiling":
+      return {
+        success: true,
+        approved: true,
+        referenceNumber: `GER-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+        submittedAt: new Date().toISOString(),
+      };
+
+    case "provideMissingInsurance":
+      return {
+        success: true,
+        documentId: "insurance-policy-001",
+        documentType: "insurance",
+        verified: true,
+      };
+  }
+}
 
 // Working state: telex card with blinking cursor (dashed while input streams)
 function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
@@ -74,7 +139,7 @@ function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
 }
 
 // Sage mono confirmation line used for completed client interactions
-function SageLine({ children }: { children: React.ReactNode }) {
+function SageLine({ children }: { children: ReactNode }) {
   return (
     <div
       className="mono"
@@ -91,55 +156,192 @@ function SageLine({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ToolCard({ invocation, onOutput }: ToolCardProps) {
-  const { toolCallId, toolName, state, input, output, errorText } = invocation;
-  const isClientTool = clientInteractionTools.includes(toolName);
+function ToolErrorCard({ header, errorText }: { header: string; errorText?: string }) {
+  return (
+    <article
+      className="card"
+      style={{ borderLeft: "4px solid var(--clay)" }}
+    >
+      <CardHead>{header}</CardHead>
+      <div className="notam-body">
+        <StatusMark word="problem" />
+        {errorText ? (
+          <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
+            {errorText}
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function ToolStateCard<T extends string>({
+  part,
+  toolName,
+  children,
+}: {
+  part: ToolPart<T>;
+  toolName: T;
+  children: (output: Record<string, unknown>) => ReactNode;
+}) {
   const header = toolHeaders[toolName] ?? toolName.toUpperCase();
 
-  // Input still streaming from the model — dashed working card
-  if (state === "input-streaming") {
+  if (part.state === "input-streaming") {
     return <WorkingCard header={header} dashed />;
   }
 
-  // Failure — clay left edge + problem line
-  if (state === "output-error" || state === "output-denied") {
-    return (
-      <article
-        className="card"
-        style={{ borderLeft: "4px solid var(--clay)" }}
-      >
-        <CardHead>{header}</CardHead>
-        <div className="notam-body">
-          <StatusMark word="problem" />
-          {errorText ? (
-            <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-              {errorText}
-            </div>
-          ) : null}
-        </div>
-      </article>
-    );
+  if (part.state === "output-error" || part.state === "output-denied") {
+    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
   }
 
-  // Tools with output (server results + completed client interactions)
-  if (state === "output-available" && output) {
-    return <ServerToolOutput toolName={toolName} output={output} />;
+  if (part.state === "output-available" && part.output) {
+    return children(isRecord(part.output) ? part.output : { value: part.output });
   }
 
-  // Client tools waiting for interaction
-  if (isClientTool && state !== "output-available") {
-    return (
-      <ClientToolInteraction
-        toolName={toolName}
-        toolCallId={toolCallId}
-        input={input}
-        onOutput={onOutput}
-      />
-    );
-  }
-
-  // Server tool executing
   return <WorkingCard header={header} />;
+}
+
+export function AssessEligibilityToolPart({ part }: { part: ToolPart<"assessEligibility"> }) {
+  return <ToolStateCard part={part} toolName="assessEligibility">{(output) => <ServerToolOutput toolName="assessEligibility" output={output} />}</ToolStateCard>;
+}
+
+export function RecommendVisaRouteToolPart({ part }: { part: ToolPart<"recommendVisaRoute"> }) {
+  return <ToolStateCard part={part} toolName="recommendVisaRoute">{(output) => <ServerToolOutput toolName="recommendVisaRoute" output={output} />}</ToolStateCard>;
+}
+
+export function BuildChecklistToolPart({ part }: { part: ToolPart<"buildChecklist"> }) {
+  return <ToolStateCard part={part} toolName="buildChecklist">{(output) => <ServerToolOutput toolName="buildChecklist" output={output} />}</ToolStateCard>;
+}
+
+export function ReviewDocumentsToolPart({ part }: { part: ToolPart<"reviewDocuments"> }) {
+  return <ToolStateCard part={part} toolName="reviewDocuments">{(output) => <ServerToolOutput toolName="reviewDocuments" output={output} />}</ToolStateCard>;
+}
+
+export function GenerateApplicationToolPart({ part }: { part: ToolPart<"generateApplication"> }) {
+  return <ToolStateCard part={part} toolName="generateApplication">{(output) => <ServerToolOutput toolName="generateApplication" output={output} />}</ToolStateCard>;
+}
+
+export function PrepareSupportingPackToolPart({ part }: { part: ToolPart<"prepareSupportingPack"> }) {
+  return <ToolStateCard part={part} toolName="prepareSupportingPack">{(output) => <ServerToolOutput toolName="prepareSupportingPack" output={output} />}</ToolStateCard>;
+}
+
+export function RunRiskReviewToolPart({ part }: { part: ToolPart<"runRiskReview"> }) {
+  return <ToolStateCard part={part} toolName="runRiskReview">{(output) => <ServerToolOutput toolName="runRiskReview" output={output} />}</ToolStateCard>;
+}
+
+export function BookAppointmentToolPart({ part }: { part: ToolPart<"bookAppointment"> }) {
+  return <ToolStateCard part={part} toolName="bookAppointment">{(output) => <ServerToolOutput toolName="bookAppointment" output={output} />}</ToolStateCard>;
+}
+
+export function TrackEmbassyUpdatesToolPart({ part }: { part: ToolPart<"trackEmbassyUpdates"> }) {
+  return <ToolStateCard part={part} toolName="trackEmbassyUpdates">{(output) => <ServerToolOutput toolName="trackEmbassyUpdates" output={output} />}</ToolStateCard>;
+}
+
+export function TrackDecisionToolPart({ part }: { part: ToolPart<"trackDecision"> }) {
+  return <ToolStateCard part={part} toolName="trackDecision">{(output) => <ServerToolOutput toolName="trackDecision" output={output} />}</ToolStateCard>;
+}
+
+export function UploadDocumentsToolPart({
+  part,
+  onOutput,
+}: {
+  part: ToolPart<"uploadDocuments">;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <ClientToolPart
+      part={part}
+      toolName="uploadDocuments"
+      onOutput={onOutput}
+      renderOutput={(output) => <ServerToolOutput toolName="uploadDocuments" output={output} />}
+    />
+  );
+}
+
+export function PayFeesToolPart({
+  part,
+  onOutput,
+}: {
+  part: ToolPart<"payFees">;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <ClientToolPart
+      part={part}
+      toolName="payFees"
+      onOutput={onOutput}
+      renderOutput={(output) => <ServerToolOutput toolName="payFees" output={output} />}
+    />
+  );
+}
+
+export function SubmitFilingToolPart({
+  part,
+  onOutput,
+}: {
+  part: ToolPart<"submitFiling">;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <ClientToolPart
+      part={part}
+      toolName="submitFiling"
+      onOutput={onOutput}
+      renderOutput={(output) => <ServerToolOutput toolName="submitFiling" output={output} />}
+    />
+  );
+}
+
+export function ProvideMissingInsuranceToolPart({
+  part,
+  onOutput,
+}: {
+  part: ToolPart<"provideMissingInsurance">;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <ClientToolPart
+      part={part}
+      toolName="provideMissingInsurance"
+      onOutput={onOutput}
+      renderOutput={(output) => <ServerToolOutput toolName="provideMissingInsurance" output={output} />}
+    />
+  );
+}
+
+export function ToolPartRenderer({ part, onOutput }: ToolPartRendererProps) {
+  switch (part.type) {
+    case "tool-assessEligibility":
+      return <AssessEligibilityToolPart part={part} />;
+    case "tool-recommendVisaRoute":
+      return <RecommendVisaRouteToolPart part={part} />;
+    case "tool-buildChecklist":
+      return <BuildChecklistToolPart part={part} />;
+    case "tool-uploadDocuments":
+      return <UploadDocumentsToolPart part={part} onOutput={onOutput} />;
+    case "tool-reviewDocuments":
+      return <ReviewDocumentsToolPart part={part} />;
+    case "tool-generateApplication":
+      return <GenerateApplicationToolPart part={part} />;
+    case "tool-prepareSupportingPack":
+      return <PrepareSupportingPackToolPart part={part} />;
+    case "tool-runRiskReview":
+      return <RunRiskReviewToolPart part={part} />;
+    case "tool-bookAppointment":
+      return <BookAppointmentToolPart part={part} />;
+    case "tool-payFees":
+      return <PayFeesToolPart part={part} onOutput={onOutput} />;
+    case "tool-submitFiling":
+      return <SubmitFilingToolPart part={part} onOutput={onOutput} />;
+    case "tool-trackEmbassyUpdates":
+      return <TrackEmbassyUpdatesToolPart part={part} />;
+    case "tool-trackDecision":
+      return <TrackDecisionToolPart part={part} />;
+    case "tool-provideMissingInsurance":
+      return <ProvideMissingInsuranceToolPart part={part} onOutput={onOutput} />;
+    default:
+      return null;
+  }
 }
 
 // Server tool output display
@@ -635,70 +837,54 @@ function ServerToolOutput({
 }
 
 // Client tool interaction UI
-function ClientToolInteraction({
+function ClientToolPart<T extends GermainClientToolName>({
+  part,
   toolName,
-  toolCallId,
-  input,
   onOutput,
+  renderOutput,
 }: {
-  toolName: string;
-  toolCallId: string;
-  input?: Record<string, unknown>;
-  onOutput: (toolCallId: string, toolName: string, output: unknown) => void;
+  part: ToolPart<T>;
+  toolName: T;
+  onOutput: (result: GermainClientToolResult) => void;
+  renderOutput: (output: Record<string, unknown>) => ReactNode;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const header = toolHeaders[toolName] ?? toolName.toUpperCase();
+  const input = part.input;
+
+  if (part.state === "input-streaming") {
+    return <WorkingCard header={header} dashed />;
+  }
+
+  if (part.state === "output-error" || part.state === "output-denied") {
+    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+  }
+
+  if (part.state === "output-available" && part.output) {
+    return renderOutput(isRecord(part.output) ? part.output : { value: part.output });
+  }
 
   const handleAction = () => {
     setIsSubmitting(true);
 
-    // Mock different outputs based on tool
-    let output: Record<string, unknown> = { success: true };
-
-    switch (toolName) {
-      case "uploadDocuments":
-        output = {
-          success: true,
-          uploadedCount: (input?.requiredTypes as string[])?.length || 3,
-          documents: (input?.requiredTypes as string[])?.map((type, i) => ({
-            id: `doc-${i}`,
-            type,
-            name: `${type.replace("_", " ")}.pdf`,
-            status: "uploaded",
-          })) || [],
-        };
-        break;
-
-      case "payFees":
-        output = {
-          success: true,
-          paymentRef: `PAY-${Date.now()}`,
-          amount: input?.total || 120,
-          paidAt: new Date().toISOString(),
-        };
-        break;
-
-      case "submitFiling":
-        output = {
-          success: true,
-          approved: true,
-          referenceNumber: `GER-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
-          submittedAt: new Date().toISOString(),
-        };
-        break;
-
-      case "provideMissingInsurance":
-        output = {
-          success: true,
-          documentId: "insurance-policy-001",
-          documentType: "insurance",
-          verified: true,
-        };
-        break;
-    }
+    const output = getClientToolOutput(toolName, input);
 
     // Simulate processing delay
     setTimeout(() => {
-      onOutput(toolCallId, toolName, output);
+      switch (toolName) {
+        case "uploadDocuments":
+          onOutput({ tool: "uploadDocuments", toolCallId: part.toolCallId, output: output as UploadDocumentsOutput });
+          break;
+        case "payFees":
+          onOutput({ tool: "payFees", toolCallId: part.toolCallId, output: output as PayFeesOutput });
+          break;
+        case "submitFiling":
+          onOutput({ tool: "submitFiling", toolCallId: part.toolCallId, output: output as SubmitFilingOutput });
+          break;
+        case "provideMissingInsurance":
+          onOutput({ tool: "provideMissingInsurance", toolCallId: part.toolCallId, output: output as ProvideMissingInsuranceOutput });
+          break;
+      }
       setIsSubmitting(false);
     }, 800);
   };
@@ -706,8 +892,8 @@ function ClientToolInteraction({
   // Render different UI based on tool
   switch (toolName) {
     case "uploadDocuments": {
-      const requiredTypes = (input?.requiredTypes as string[]) ?? [];
-      const criticalDocuments = (input?.criticalDocuments as string[]) ?? [];
+      const requiredTypes = stringArrayField(input, "requiredTypes");
+      const criticalDocuments = stringArrayField(input, "criticalDocuments");
       return (
         <FileUpload
           requiredTypes={requiredTypes}
@@ -716,10 +902,14 @@ function ClientToolInteraction({
           onUpload={(documents) => {
             setIsSubmitting(true);
             setTimeout(() => {
-              onOutput(toolCallId, toolName, {
+              onOutput({
+                tool: "uploadDocuments",
+                toolCallId: part.toolCallId,
+                output: {
                 success: true,
                 uploadedCount: documents.length,
                 documents,
+                },
               });
               setIsSubmitting(false);
             }, 800);
@@ -729,16 +919,14 @@ function ClientToolInteraction({
     }
 
     case "payFees": {
-      const fees = input as
-        | { visaFee?: number; serviceFee?: number; vacFee?: number; total?: number }
-        | undefined;
+      const fees = isRecord(input) ? input : {};
       return (
         <Card className="notam">
           <CardHead>FEES</CardHead>
           <div className="cl">
-            <ClRow label="Visa fee" state={`€${fees?.visaFee ?? 80}`} />
-            <ClRow label="Service fee" state={`€${fees?.serviceFee ?? 25}`} />
-            <ClRow label="VAC fee" state={`€${fees?.vacFee ?? 15}`} />
+            <ClRow label="Visa fee" state={`€${numberField(fees, "visaFee", 80)}`} />
+            <ClRow label="Service fee" state={`€${numberField(fees, "serviceFee", 25)}`} />
+            <ClRow label="VAC fee" state={`€${numberField(fees, "vacFee", 15)}`} />
             <div className="cl-row" style={{ fontWeight: 700 }}>
               <span>TOTAL</span>
               <span className="dots" />
@@ -746,7 +934,7 @@ function ClientToolInteraction({
                 className="state"
                 style={{ color: "var(--ink)", fontWeight: 700, fontSize: 11 }}
               >
-                €{fees?.total ?? 120}
+                €{numberField(fees, "total", 120)}
               </span>
             </div>
             <div
@@ -771,9 +959,9 @@ function ClientToolInteraction({
 
     case "submitFiling": {
       const approvalLikelihood =
-        typeof input?.approvalLikelihood === "number"
-          ? input.approvalLikelihood
-          : 85;
+          isRecord(input) && typeof input.approvalLikelihood === "number"
+            ? input.approvalLikelihood
+            : 85;
       return (
         <Card className="notam">
           <CardHead>READY TO FILE</CardHead>
@@ -800,16 +988,15 @@ function ClientToolInteraction({
     }
 
     case "provideMissingInsurance": {
-      const rfeDetails = input?.rfeDetails as
-        | { missingItem?: string; explanation?: string }
-        | undefined;
+      const rfeDetails = isRecord(input) && isRecord(input.rfeDetails) ? input.rfeDetails : {};
+      const deadline = isRecord(input) && typeof input.deadline === "string" ? input.deadline : "";
       return (
         <Card className="notam">
           <CardHead>RFE — INSURANCE REQUIRED</CardHead>
           <div className="notam-body">
-            <strong>{rfeDetails?.missingItem}</strong>
+            <strong>{stringField(rfeDetails, "missingItem")}</strong>
             <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-              {rfeDetails?.explanation}
+              {stringField(rfeDetails, "explanation")}
             </div>
             <div
               className="mono"
@@ -820,7 +1007,7 @@ function ClientToolInteraction({
                 color: "var(--ink2)",
               }}
             >
-              DEADLINE {input?.deadline as string}
+              DEADLINE {deadline}
             </div>
             <div style={{ marginTop: 10 }}>
               <KeyButton
@@ -837,21 +1024,6 @@ function ClientToolInteraction({
     }
 
     default:
-      return (
-        <Card className="notam">
-          <CardHead>{toolName.toUpperCase()}</CardHead>
-          <div className="cl">
-            <div style={{ paddingTop: 8 }}>
-              <KeyButton
-                onClick={handleAction}
-                disabled={isSubmitting}
-                submittingLabel="WORKING…"
-              >
-                CONFIRM
-              </KeyButton>
-            </div>
-          </div>
-        </Card>
-      );
+      return null;
   }
 }
