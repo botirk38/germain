@@ -2,7 +2,7 @@
 
 import type { GermainUIMessage } from "@/lib/agents/germain";
 import { ToolCard } from "./ToolCard";
-import { User, Bot } from "lucide-react";
+import { Markdown } from "./attache/Markdown";
 import { Fragment } from "react";
 import { isToolUIPart, getToolName, type ToolUIPart } from "ai";
 
@@ -24,37 +24,23 @@ function getMessageText(message: GermainUIMessage): string {
 
 export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesProps) {
   return (
-    <div className="p-4 space-y-4">
+    <div className="feed">
       {messages.map((message) => (
         <Fragment key={message.id}>
           {message.role === "user" && (
-            <div className="flex gap-3 justify-end">
-              <div className="message-user max-w-[80%]">
-                <div className="flex items-center gap-2 mb-1 opacity-70">
-                  <User className="w-4 h-4" />
-                  <span className="text-xs font-medium">You</span>
-                </div>
-                <div className="text-sm">{getMessageText(message)}</div>
-              </div>
+            <div className="msg user">
+              <div className="bubble">{getMessageText(message)}</div>
             </div>
           )}
 
           {message.role === "assistant" && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-5 h-5 text-white" />
+            <div className="msg">
+              <div className="callsign" aria-hidden="true">
+                A
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-[#a3a3a3]">Germain</span>
-                </div>
-
+              <div className="body">
                 {/* Text content */}
-                {getMessageText(message) && (
-                  <div className="message-assistant text-sm mb-2">
-                    {getMessageText(message)}
-                  </div>
-                )}
+                {getMessageText(message) && <Markdown text={getMessageText(message)} />}
 
                 {/* Tool invocations - v6 API */}
                 {message.parts?.map((part, partIndex) => {
@@ -91,19 +77,16 @@ export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesPro
         </Fragment>
       ))}
 
-      {/* Loading indicator */}
+      {/* Streaming indicator */}
       {status === "streaming" && (
-        <div className="flex gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center flex-shrink-0">
-            <Bot className="w-5 h-5 text-white" />
+        <div className="msg typing">
+          <div className="callsign" aria-hidden="true">
+            A
           </div>
-          <div className="flex items-center gap-2 text-[#737373]">
-            <div className="flex gap-1">
-              <div className="w-2 h-2 bg-[#737373] rounded-full animate-bounce" />
-              <div className="w-2 h-2 bg-[#737373] rounded-full animate-bounce [animation-delay:0.1s]" />
-              <div className="w-2 h-2 bg-[#737373] rounded-full animate-bounce [animation-delay:0.2s]" />
-            </div>
-            <span className="text-sm">Germain is thinking...</span>
+          <div className="body">
+            <span className="t">
+              ATTACHÉ IS TYPING <span className="cursor">▌</span>
+            </span>
           </div>
         </div>
       )}

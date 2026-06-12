@@ -130,7 +130,18 @@ function applyToolOutput(
     }
 
     case "uploadDocuments": {
-      // User uploaded documents - status will be updated via client
+      // Fold the user's uploaded files into the checklist stubs so the
+      // DOCUMENTS panel reflects what was attached (status: uploaded).
+      const uploaded =
+        (output.documents as Array<{ type: string; name?: string }>) || [];
+      if (uploaded.length) {
+        const byType = new Map(uploaded.map((u) => [u.type, u]));
+        updates.documents = state.documents.map((d) =>
+          byType.has(d.type)
+            ? { ...d, status: "uploaded" as const, name: byType.get(d.type)?.name || d.name }
+            : d
+        );
+      }
       break;
     }
 

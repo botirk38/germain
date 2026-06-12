@@ -3,51 +3,56 @@
 import { useEffect, useState } from "react";
 
 interface ApprovalLikelihoodRingProps {
-  percentage: number;
+  likelihood: number;
   size?: number;
 }
 
+// Approval-odds ring in the ops-console skin: faint line track, status-toned
+// progress arc (sage / amber / clay), mono bold percent in the center.
 export function ApprovalLikelihoodRing({
-  percentage,
-  size = 80,
+  likelihood,
+  size = 84,
 }: ApprovalLikelihoodRingProps) {
-  const [animatedPercentage, setAnimatedPercentage] = useState(0);
+  const [animatedLikelihood, setAnimatedLikelihood] = useState(0);
 
   useEffect(() => {
     // Animate from 0 to target
     const timeout = setTimeout(() => {
-      setAnimatedPercentage(percentage);
+      setAnimatedLikelihood(likelihood);
     }, 100);
     return () => clearTimeout(timeout);
-  }, [percentage]);
+  }, [likelihood]);
 
   const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (animatedPercentage / 100) * circumference;
+  const strokeDashoffset =
+    circumference - (animatedLikelihood / 100) * circumference;
 
-  const getColorClass = () => {
-    if (percentage >= 80) return "odds-ring-fill--high";
-    if (percentage >= 50) return "odds-ring-fill--medium";
-    return "odds-ring-fill--low";
-  };
+  const tone =
+    likelihood >= 70 ? "var(--sage)" : likelihood >= 45 ? "var(--amber)" : "var(--clay)";
 
   return (
-    <div className="odds-ring" style={{ width: size, height: size }}>
+    <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size}>
-        {/* Background circle */}
+        {/* Background track */}
         <circle
-          className="odds-ring-bg"
           cx={size / 2}
           cy={size / 2}
           r={radius}
+          fill="none"
+          stroke="var(--line)"
+          strokeWidth={2}
         />
-        {/* Progress circle */}
+        {/* Progress arc */}
         <circle
-          className={`odds-ring-fill ${getColorClass()}`}
           cx={size / 2}
           cy={size / 2}
           r={radius}
+          fill="none"
+          stroke={tone}
+          strokeWidth={strokeWidth}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
           style={{
             strokeDasharray: circumference,
             strokeDashoffset,
@@ -55,11 +60,13 @@ export function ApprovalLikelihoodRing({
           }}
         />
       </svg>
-      <div className="odds-ring-content">
-        <div className={`odds-ring-value ${getColorClass().replace("odds-ring-fill", "text")}`}>
-          {percentage}%
-        </div>
-        <div className="odds-ring-label">Approval</div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span
+          className="font-mono font-bold text-ink"
+          style={{ fontSize: Math.round(size * 0.21) }}
+        >
+          {likelihood}%
+        </span>
       </div>
     </div>
   );

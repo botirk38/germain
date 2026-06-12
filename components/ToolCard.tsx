@@ -2,24 +2,13 @@
 
 // Component only receives invocation via props, no need for message type
 import { useState } from "react";
-import {
-  CheckCircle2,
-  Loader2,
-  AlertCircle,
-  Upload,
-  CreditCard,
-  FileCheck,
-  Shield,
-  TrendingUp,
-  Calendar,
-  FileText,
-  Globe,
-  ClipboardList,
-  Search,
-  Package,
-  AlertTriangle,
-  Award,
-} from "lucide-react";
+import { Card, CardHead, CardFoot, ClRow } from "@/components/attache/Card";
+import { StatusMark } from "@/components/attache/StatusMark";
+import { KeyButton } from "@/components/attache/KeyButton";
+import { MachinePanel } from "@/components/attache/MachinePanel";
+import { SlotBox } from "@/components/attache/SlotBox";
+import { FileUpload } from "@/components/attache/FileUpload";
+import { reviewStatusWord } from "@/lib/attache-display";
 
 interface ToolInvocation {
   toolCallId: string;
@@ -42,38 +31,22 @@ interface ToolCardProps {
   onOutput: (toolCallId: string, toolName: string, output: unknown) => void;
 }
 
-const toolIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  assessEligibility: Globe,
-  recommendVisaRoute: Globe,
-  buildChecklist: ClipboardList,
-  uploadDocuments: Upload,
-  reviewDocuments: Search,
-  generateApplication: FileText,
-  prepareSupportingPack: Package,
-  runRiskReview: AlertTriangle,
-  bookAppointment: Calendar,
-  payFees: CreditCard,
-  submitFiling: FileCheck,
-  trackEmbassyUpdates: TrendingUp,
-  trackDecision: Award,
-  provideMissingInsurance: Shield,
-};
-
-const toolTitles: Record<string, string> = {
-  assessEligibility: "Eligibility Assessment",
-  recommendVisaRoute: "Visa Route Recommendation",
-  buildChecklist: "Document Checklist",
-  uploadDocuments: "Document Upload",
-  reviewDocuments: "Document Review",
-  generateApplication: "Application Form",
-  prepareSupportingPack: "Supporting Documents",
-  runRiskReview: "Risk Assessment",
-  bookAppointment: "Biometrics Appointment",
-  payFees: "Fee Payment",
-  submitFiling: "Submit Application",
-  trackEmbassyUpdates: "Embassy Updates",
-  trackDecision: "Visa Decision",
-  provideMissingInsurance: "Provide Insurance Document",
+// Uppercase mono card headers — replaces the old icon map
+const toolHeaders: Record<string, string> = {
+  assessEligibility: "ELIGIBILITY",
+  recommendVisaRoute: "VISA ROUTE",
+  buildChecklist: "DOCUMENT CHECKLIST",
+  uploadDocuments: "UPLOAD REQUIRED",
+  reviewDocuments: "DOCUMENT REVIEW",
+  generateApplication: "APPLICATION FORM",
+  prepareSupportingPack: "SUPPORTING PACK",
+  runRiskReview: "RISK REVIEW",
+  bookAppointment: "APPOINTMENT",
+  payFees: "FEES",
+  submitFiling: "READY TO FILE",
+  trackEmbassyUpdates: "EMBASSY UPDATE",
+  trackDecision: "DECISION",
+  provideMissingInsurance: "RFE — INSURANCE REQUIRED",
 };
 
 // Client-interaction tools (no server execute)
@@ -84,92 +57,89 @@ const clientInteractionTools = [
   "provideMissingInsurance",
 ];
 
-export function ToolCard({ invocation, onOutput }: ToolCardProps) {
-  const { toolCallId, toolName, state, input, output } = invocation;
-  const isClientTool = clientInteractionTools.includes(toolName);
-  const Icon = toolIcons[toolName] || FileText;
-
-  // Determine card state class
-  const getCardStateClass = () => {
-    if (state === "input-streaming") return "tool-card--input-streaming";
-    if ((state === "input-available" || state === "approval-requested") && isClientTool)
-      return "tool-card--input-available";
-    if (state === "output-available") return "tool-card--output-available";
-    if (state === "output-error" || state === "output-denied") return "tool-card--error";
-    return "";
-  };
-
-  // Render content based on tool and state
-  const renderContent = () => {
-    // Server tools with output
-    if (state === "output-available" && output) {
-      return <ServerToolOutput toolName={toolName} output={output} />;
-    }
-
-    // Client tools waiting for interaction
-    if (isClientTool && state !== "output-available") {
-      return (
-        <ClientToolInteraction
-          toolName={toolName}
-          toolCallId={toolCallId}
-          input={input}
-          onOutput={onOutput}
-        />
-      );
-    }
-
-    // Loading state
-    return (
-      <div className="flex items-center gap-2 text-[#737373]">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm">Processing...</span>
-      </div>
-    );
-  };
-
+// Working state: telex card with blinking cursor (dashed while input streams)
+function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
   return (
-    <div className={`tool-card ${getCardStateClass()} animate-slide-in`}>
-      <div className="flex items-center gap-2 mb-3">
-        <div
-          className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-            state === "output-available"
-              ? "bg-green-500/20 text-green-500"
-              : "bg-blue-500/20 text-blue-500"
-          }`}
-        >
-          <Icon className="w-4 h-4" />
-        </div>
-        <div className="flex-1">
-          <div className="text-sm font-medium">{toolTitles[toolName] || toolName}</div>
-          <div className="text-xs text-[#737373]">
-            {state === "output-available"
-              ? "Complete"
-              : state === "output-error" || state === "output-denied"
-              ? "Failed"
-              : state === "approval-requested" || state === "approval-responded"
-              ? "Needs approval"
-              : isClientTool
-              ? "Waiting for your action"
-              : "Processing..."}
-          </div>
-        </div>
-        {state === "output-available" && (
-          <CheckCircle2 className="w-5 h-5 text-green-500" />
-        )}
-        {(state === "output-error" || state === "output-denied") && (
-          <AlertCircle className="w-5 h-5 text-red-500" />
-        )}
-        {isClientTool &&
-          state !== "output-available" &&
-          state !== "output-error" &&
-          state !== "output-denied" && (
-            <AlertCircle className="w-5 h-5 text-amber-500" />
-          )}
+    <article
+      className="card"
+      style={dashed ? { borderStyle: "dashed" } : undefined}
+    >
+      <div className="typing" style={{ padding: "4px 14px" }}>
+        <span className="t">
+          {header} — WORKING…<span className="cursor">▌</span>
+        </span>
       </div>
+    </article>
+  );
+}
 
-      <div className="mt-2">{renderContent()}</div>
+// Sage mono confirmation line used for completed client interactions
+function SageLine({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="mono"
+      style={{
+        color: "var(--sage)",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.14em",
+        padding: "8px 0 4px",
+      }}
+    >
+      {children}
     </div>
   );
+}
+
+export function ToolCard({ invocation, onOutput }: ToolCardProps) {
+  const { toolCallId, toolName, state, input, output, errorText } = invocation;
+  const isClientTool = clientInteractionTools.includes(toolName);
+  const header = toolHeaders[toolName] ?? toolName.toUpperCase();
+
+  // Input still streaming from the model — dashed working card
+  if (state === "input-streaming") {
+    return <WorkingCard header={header} dashed />;
+  }
+
+  // Failure — clay left edge + problem line
+  if (state === "output-error" || state === "output-denied") {
+    return (
+      <article
+        className="card"
+        style={{ borderLeft: "4px solid var(--clay)" }}
+      >
+        <CardHead>{header}</CardHead>
+        <div className="notam-body">
+          <StatusMark word="problem" />
+          {errorText ? (
+            <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
+              {errorText}
+            </div>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
+
+  // Tools with output (server results + completed client interactions)
+  if (state === "output-available" && output) {
+    return <ServerToolOutput toolName={toolName} output={output} />;
+  }
+
+  // Client tools waiting for interaction
+  if (isClientTool && state !== "output-available") {
+    return (
+      <ClientToolInteraction
+        toolName={toolName}
+        toolCallId={toolCallId}
+        input={input}
+        onOutput={onOutput}
+      />
+    );
+  }
+
+  // Server tool executing
+  return <WorkingCard header={header} />;
 }
 
 // Server tool output display
@@ -184,264 +154,482 @@ function ServerToolOutput({
   switch (toolName) {
     case "assessEligibility":
       return (
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Eligible:</span>
-            <span className={output.eligible ? "text-green-500" : "text-red-500"}>
-              {output.eligible ? "Yes" : "No"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Visa Type:</span>
-            <span>{output.visaType as string}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Base Odds:</span>
-            <span className="odds-badge odds-badge--medium">
-              <TrendingUp className="w-3 h-3" />
-              {output.baseLikelihood as number}%
-            </span>
-          </div>
-          <p className="text-[#a3a3a3] text-xs mt-2">{output.reasoning as string}</p>
-        </div>
-      );
-
-    case "recommendVisaRoute":
-      return (
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Category:</span>
-            <span className="capitalize">{output.visaCategory as string}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Consulate:</span>
-            <span>{output.consulate as string}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Processing:</span>
-            <span>{output.processingTime as string}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Visa Fee:</span>
-            <span>€{output.visaFee as number}</span>
-          </div>
-          <div className="mt-2">
-            <div className="text-xs text-[#737373] mb-1">Key Requirements:</div>
-            <div className="flex flex-wrap gap-1">
-              {(output.requirements as string[])?.slice(0, 3).map((req, i) => (
-                <span key={i} className="text-xs px-2 py-1 bg-[#1f1f1f] rounded">
-                  {req}
-                </span>
-              ))}
+        <Card>
+          <CardHead>ELIGIBILITY</CardHead>
+          <div className="cl">
+            <ClRow
+              label="Eligible"
+              state={<StatusMark word={output.eligible ? "verified" : "problem"} />}
+            />
+            <ClRow label="Visa type" state={output.visaType as string} />
+            <ClRow
+              label="Base odds"
+              state={`${output.baseLikelihood as number}%`}
+            />
+            <div className="poll-detail" style={{ paddingTop: 4 }}>
+              {output.reasoning as string}
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-[#737373]">Odds Boost:</span>
-            <span className="odds-badge odds-badge--high">
-              +{output.oddsBoost as number}%
-            </span>
-          </div>
-        </div>
+        </Card>
       );
 
-    case "buildChecklist":
+    case "recommendVisaRoute": {
+      const requirements = (output.requirements as string[]) ?? [];
       return (
-        <div className="space-y-2 text-sm">
-          <div className="text-xs text-[#737373] mb-2">
-            {(output.requiredDocuments as Array<{ critical: boolean }>)?.filter((d) => d.critical).length}{" "}
-            critical documents required
-          </div>
-          <div className="space-y-1">
-            {(output.requiredDocuments as Array<{ type: string; description: string; critical: boolean }>)
-              ?.slice(0, 5)
-              .map((doc, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      doc.critical ? "bg-red-500" : "bg-amber-500"
-                    }`}
-                  />
-                  <span className={doc.critical ? "text-[#f5f5f5]" : "text-[#a3a3a3]"}>
-                    {doc.description}
+        <Card>
+          <CardHead>VISA ROUTE</CardHead>
+          <div className="cl">
+            <div
+              className="mono"
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                padding: "8px 0 2px",
+              }}
+            >
+              {output.consulate as string}
+            </div>
+            <ClRow
+              label="Category"
+              state={String(output.visaCategory ?? "").toUpperCase()}
+            />
+            <ClRow
+              label="Processing time"
+              state={output.processingTime as string}
+            />
+            <ClRow label="Fee" state={`€${output.visaFee as number}`} />
+            {requirements.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 5,
+                  padding: "8px 0 2px",
+                }}
+              >
+                {requirements.slice(0, 4).map((req, i) => (
+                  <span key={i} className="fchip">
+                    {req}
                   </span>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
           </div>
-          <div className="text-xs text-[#737373] mt-2">
-            Est. completion: {output.estimatedCompletionDays as number} days
-          </div>
-        </div>
+          <CardFoot>+{output.oddsBoost as number} ODDS</CardFoot>
+        </Card>
       );
+    }
 
-    case "reviewDocuments":
-      const issues = (output.issues as Array<{ severity: string; message: string; impact: number }>) || [];
-      const recommendations = (output.recommendations as Array<{ issue: string; impact: number; category: string }>) || [];
+    case "buildChecklist": {
+      const requiredDocuments =
+        (output.requiredDocuments as Array<{
+          type: string;
+          description: string;
+          critical: boolean;
+        }>) ?? [];
+      const optionalDocuments = (output.optionalDocuments as string[]) ?? [];
+      const criticalCount = requiredDocuments.filter((d) => d.critical).length;
+      // The full per-document list lives in the sidebar DOCUMENTS panel and the
+      // upload card — keep this card a concise summary so it isn't duplicated.
       return (
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Status:</span>
-            <span
-              className={
-                output.verificationStatus === "verified"
-                  ? "text-green-500"
-                  : output.verificationStatus === "needs_review"
-                  ? "text-amber-500"
-                  : "text-red-500"
+        <Card>
+          <CardHead>DOCUMENT CHECKLIST</CardHead>
+          <div className="cl">
+            <ClRow label="Required documents" state={`${requiredDocuments.length}`} />
+            <ClRow label="Critical" state={`${criticalCount}`} critical />
+            {optionalDocuments.length > 0 && (
+              <ClRow label="Optional" state={`${optionalDocuments.length}`} />
+            )}
+          </div>
+          <CardFoot>
+            EST. {output.estimatedCompletionDays as number} DAYS · LISTED IN THE
+            SIDEBAR
+          </CardFoot>
+        </Card>
+      );
+    }
+
+    case "reviewDocuments": {
+      const fields = (output.extractedFields as Record<string, string>) ?? {};
+      const issues =
+        (output.issues as Array<{
+          severity: string;
+          message: string;
+          impact: number;
+        }>) ?? [];
+      const recommendations =
+        (output.recommendations as Array<{
+          id?: string;
+          issue: string;
+          fix: string;
+          impact: number;
+        }>) ?? [];
+      const verificationStatus = output.verificationStatus as
+        | "verified"
+        | "needs_review"
+        | "rejected"
+        | undefined;
+      return (
+        <Card>
+          <CardHead>DOCUMENT REVIEW</CardHead>
+          <div className="cl">
+            {Object.entries(fields).map(([field, value], i) => (
+              <div
+                key={field}
+                className="cl-row poll-row"
+                style={{ animationDelay: `${i * 90}ms` }}
+              >
+                <span>{field.replace(/_/g, " ").toUpperCase()}</span>
+                <span className="dots" />
+                <span className="state">{value}</span>
+              </div>
+            ))}
+            <ClRow
+              label="Status"
+              state={
+                verificationStatus ? (
+                  <StatusMark word={reviewStatusWord(verificationStatus)} />
+                ) : (
+                  <StatusMark word="waiting" />
+                )
               }
-            >
-              {(output.verificationStatus as string)?.replace("_", " ")}
-            </span>
+            />
+            {issues.map((issue, i) => (
+              <div
+                key={`issue-${i}`}
+                className={
+                  issue.severity === "critical"
+                    ? "poll-detail bad"
+                    : "poll-detail"
+                }
+                style={
+                  issue.severity === "warning"
+                    ? { color: "var(--amber)" }
+                    : undefined
+                }
+              >
+                {issue.severity === "critical"
+                  ? "✕ "
+                  : issue.severity === "warning"
+                  ? "▲ "
+                  : ""}
+                {issue.message}
+              </div>
+            ))}
+            {recommendations.map((rec, i) => (
+              <div key={rec.id ?? `rec-${i}`} className="poll-detail">
+                <span style={{ color: "var(--amber)" }}>▲ Check this</span> —{" "}
+                {rec.fix}{" "}
+                <span className="mono" style={{ color: "var(--sage)" }}>
+                  +{rec.impact}%
+                </span>
+              </div>
+            ))}
           </div>
+        </Card>
+      );
+    }
 
-          {issues.length > 0 && (
-            <div className="mt-2">
-              <div className="text-xs text-[#737373] mb-1">Issues Found:</div>
-              {issues.slice(0, 3).map((issue, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs py-1">
-                  <AlertTriangle className="w-3 h-3 text-red-400" />
-                  <span className="text-red-400">{issue.message}</span>
-                  <span className="text-red-400/70">({issue.impact}%)</span>
-                </div>
-              ))}
-            </div>
-          )}
+    case "generateApplication": {
+      const formData = (output.formData as Record<string, string>) ?? {};
+      const consistency = output.consistencyCheck as
+        | { passed: boolean; mismatches: string[] }
+        | undefined;
+      const lines = Object.entries(formData).map(
+        ([field, value]) => `${field.toUpperCase()}: ${value || "—"} ✓`
+      );
+      if (consistency) {
+        if (consistency.passed) {
+          lines.push("CONSISTENCY CHECK: PASS");
+        } else {
+          for (const mismatch of consistency.mismatches) {
+            lines.push(`✕ ${mismatch}`);
+          }
+        }
+      }
+      return (
+        <Card>
+          <MachinePanel
+            lines={lines}
+            final={`FORM COMPLETE — EST. ODDS ${
+              output.estimatedApprovalOdds as number
+            }%`}
+          />
+        </Card>
+      );
+    }
 
-          {recommendations.length > 0 && (
-            <div className="mt-2">
-              <div className="text-xs text-green-500 mb-1">Recommendations:</div>
-              {recommendations.slice(0, 2).map((rec, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs py-1">
-                  <span className="odds-badge odds-badge--high">+{rec.impact}%</span>
-                  <span className="text-[#a3a3a3]">{rec.issue}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+    case "prepareSupportingPack":
+      return (
+        <Card>
+          <CardHead>SUPPORTING PACK</CardHead>
+          <div className="cl">
+            <ClRow label="Cover letter" state={<StatusMark word="verified" />} />
+            <ClRow label="Itinerary" state={<StatusMark word="verified" />} />
+            <ClRow
+              label="Proof of ties"
+              state={<StatusMark word="verified" />}
+            />
+          </div>
+          <CardFoot>+{output.oddsBoost as number} ODDS</CardFoot>
+        </Card>
       );
 
-    case "runRiskReview":
+    case "runRiskReview": {
+      const finalRecommendations =
+        (output.finalRecommendations as Array<{
+          id?: string;
+          issue: string;
+          fix: string;
+          impact: number;
+        }>) ?? [];
       return (
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[#737373]">Risk Score:</span>
-            <span
-              className={
-                (output.riskScore as number) < 30
-                  ? "text-green-500"
-                  : (output.riskScore as number) < 60
-                  ? "text-amber-500"
-                  : "text-red-500"
+        <Card>
+          <CardHead>RISK REVIEW</CardHead>
+          <div className="cl">
+            <ClRow
+              label="Risk score"
+              state={`${(output.riskScore as number) ?? 0}/100`}
+            />
+            <ClRow
+              label="Approval likelihood"
+              state={`${output.approvalLikelihood as number}%`}
+            />
+            <ClRow
+              label="Ready to file"
+              state={
+                <StatusMark word={output.readyToSubmit ? "verified" : "check"} />
               }
+            />
+            {finalRecommendations.map((rec, i) => (
+              <div
+                key={rec.id ?? `final-${i}`}
+                className="poll-detail"
+                style={{ color: "var(--amber)" }}
+              >
+                ▲ {rec.issue} — {rec.fix} (+{rec.impact}%)
+              </div>
+            ))}
+          </div>
+        </Card>
+      );
+    }
+
+    case "bookAppointment": {
+      const whatToBring = (output.whatToBring as string[]) ?? [];
+      return (
+        <SlotBox
+          title={`Appointment found — ${output.date as string}, ${
+            output.time as string
+          }`}
+          calChip="▦ Add to calendar"
+        >
+          <div>{output.location as string}</div>
+          <div
+            className="mono"
+            style={{
+              fontSize: 10.5,
+              fontWeight: 400,
+              letterSpacing: "0.12em",
+              marginTop: 3,
+              color: "var(--ink2)",
+            }}
+          >
+            {output.confirmationCode as string}
+          </div>
+          {whatToBring.length > 0 && (
+            <div
+              style={{
+                marginTop: 6,
+                fontWeight: 400,
+                fontSize: 11,
+                lineHeight: 1.55,
+                color: "var(--ink2)",
+              }}
             >
-              {(output.riskScore as number) || 0}/100
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Final Odds:</span>
-            <span className="odds-badge odds-badge--high">
-              {output.approvalLikelihood as number}%
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Ready:</span>
-            <span className={output.readyToSubmit ? "text-green-500" : "text-amber-500"}>
-              {output.readyToSubmit ? "Yes" : "Needs work"}
-            </span>
-          </div>
-        </div>
-      );
-
-    case "bookAppointment":
-      return (
-        <div className="space-y-2 text-sm">
-          <div className="p-2 bg-[#1f1f1f] rounded">
-            <div className="font-medium">
-              {(output.appointmentType as string)?.replace("_", " ")} Appointment
-            </div>
-            <div className="text-[#a3a3a3]">
-              {output.date as string} at {output.time as string}
-            </div>
-            <div className="text-xs text-[#737373]">{output.location as string}</div>
-          </div>
-          <div className="text-xs text-[#737373]">
-            Confirmation: {output.confirmationCode as string}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Odds Boost:</span>
-            <span className="odds-badge odds-badge--high">+{output.oddsBoost as number}%</span>
-          </div>
-        </div>
-      );
-
-    case "trackEmbassyUpdates":
-      return (
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Status:</span>
-            <span className="capitalize">{(output.status as string)?.replace("_", " ")}</span>
-          </div>
-          <p className="text-[#a3a3a3] text-xs">{(output as { message?: string }).message}</p>
-          {(output as { actionRequired?: boolean }).actionRequired && (
-            <div className="flex items-center gap-2 text-amber-500">
-              <AlertCircle className="w-4 h-4" />
-              <span className="text-xs">Action Required</span>
+              {whatToBring.map((item) => (
+                <div key={item}>· {item}</div>
+              ))}
             </div>
           )}
-          {(output as { deadline?: string }).deadline && (
-            <div className="text-xs text-[#737373]">
-              Deadline: {(output as { deadline?: string }).deadline}
-            </div>
-          )}
-        </div>
+        </SlotBox>
       );
+    }
 
-    case "trackDecision":
+    case "trackEmbassyUpdates": {
+      const actionNeeded =
+        Boolean(output.actionRequired) || output.status === "rfe_issued";
+      const rfeDetails = output.rfeDetails as
+        | { missingItem: string; explanation: string }
+        | undefined;
+      const deadline = output.deadline as string | undefined;
+      if (actionNeeded) {
+        return (
+          <Card className="notam">
+            <CardHead>EMBASSY UPDATE — ACTION NEEDED</CardHead>
+            <div className="notam-body">
+              {rfeDetails ? (
+                <>
+                  <strong>{rfeDetails.missingItem}</strong>
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 12.5,
+                      color: "var(--ink2)",
+                    }}
+                  >
+                    {rfeDetails.explanation}
+                  </div>
+                </>
+              ) : (
+                (output.message as string)
+              )}
+            </div>
+            {deadline ? <CardFoot>RESPOND BY {deadline}</CardFoot> : null}
+          </Card>
+        );
+      }
       return (
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Decision:</span>
+        <Card>
+          <CardHead>EMBASSY UPDATE</CardHead>
+          <div className="notam-body">
             <span
-              className={`font-medium capitalize ${
-                output.decision === "approved"
-                  ? "text-green-500"
-                  : output.decision === "refused"
-                  ? "text-red-500"
-                  : "text-amber-500"
-              }`}
+              className="mono"
+              style={{
+                fontSize: 9.5,
+                letterSpacing: "0.16em",
+                color: "var(--ink2)",
+              }}
             >
-              {output.decision as string}
+              {String(output.status ?? "").replace(/_/g, " ").toUpperCase()}
             </span>
+            <div style={{ marginTop: 4 }}>{output.message as string}</div>
           </div>
-          {(output as { validityPeriod?: string }).validityPeriod && (
-            <div className="flex items-center gap-2">
-              <span className="text-[#737373]">Validity:</span>
-              <span>{(output as { validityPeriod?: string }).validityPeriod}</span>
+        </Card>
+      );
+    }
+
+    case "trackDecision": {
+      const nextSteps = output.nextSteps as string | undefined;
+      if (output.decision === "approved") {
+        return (
+          <SlotBox title="● APPROVED">
+            {output.validityPeriod ? (
+              <div>Valid {output.validityPeriod as string}</div>
+            ) : null}
+            {output.entries ? (
+              <div style={{ fontWeight: 400 }}>
+                Entries: {String(output.entries)}
+              </div>
+            ) : null}
+            {nextSteps ? (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontWeight: 400,
+                  fontSize: 11.5,
+                  lineHeight: 1.5,
+                  color: "var(--ink2)",
+                }}
+              >
+                {nextSteps}
+              </div>
+            ) : null}
+          </SlotBox>
+        );
+      }
+      if (output.decision === "refused") {
+        const refusalReasons = (output.refusalReasons as string[]) ?? [];
+        return (
+          <article
+            className="card"
+            style={{ borderLeft: "4px solid var(--clay)" }}
+          >
+            <CardHead>DECISION</CardHead>
+            <div className="notam-body">
+              <StatusMark word="problem" />
+              {refusalReasons.map((reason, i) => (
+                <div key={i} className="poll-detail bad" style={{ marginTop: 4 }}>
+                  ✕ {reason}
+                </div>
+              ))}
+              {nextSteps ? (
+                <div
+                  style={{ marginTop: 6, fontSize: 12.5, color: "var(--ink2)" }}
+                >
+                  {nextSteps}
+                </div>
+              ) : null}
             </div>
-          )}
-          {(output as { entries?: string }).entries && (
-            <div className="flex items-center gap-2">
-              <span className="text-[#737373]">Entries:</span>
-              <span className="capitalize">{(output as { entries?: string }).entries}</span>
-            </div>
-          )}
-          <p className="text-[#a3a3a3] text-xs mt-2">{(output as { nextSteps?: string }).nextSteps}</p>
-        </div>
+          </article>
+        );
+      }
+      // additional_processing
+      return (
+        <Card className="notam">
+          <CardHead>DECISION — ADDITIONAL PROCESSING</CardHead>
+          <div className="notam-body">
+            <StatusMark word="check" />
+            {nextSteps ? <div style={{ marginTop: 4 }}>{nextSteps}</div> : null}
+          </div>
+        </Card>
+      );
+    }
+
+    // ---- client-interaction tools after the user acted ----
+
+    case "uploadDocuments":
+      return (
+        <Card>
+          <CardHead>UPLOAD REQUIRED</CardHead>
+          <div className="cl">
+            <SageLine>
+              ○ {(output.uploadedCount as number) ?? 0} DOCUMENTS RECEIVED
+            </SageLine>
+          </div>
+        </Card>
+      );
+
+    case "payFees":
+      return (
+        <Card>
+          <CardHead>FEES</CardHead>
+          <div className="cl">
+            <SageLine>● PAID · {output.paymentRef as string}</SageLine>
+          </div>
+        </Card>
+      );
+
+    case "submitFiling":
+      return (
+        <Card>
+          <MachinePanel
+            lines={[`REF: ${output.referenceNumber as string}`]}
+            final="APPLICATION SUBMITTED"
+            showRunway
+          />
+        </Card>
+      );
+
+    case "provideMissingInsurance":
+      return (
+        <Card>
+          <CardHead>RFE — INSURANCE REQUIRED</CardHead>
+          <div className="cl">
+            <SageLine>● POLICY VERIFIED</SageLine>
+          </div>
+        </Card>
       );
 
     default:
       return (
-        <div className="text-sm text-[#a3a3a3]">
-          {(output as { approvalLikelihood?: number }).approvalLikelihood && (
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#737373]">Approval Odds:</span>
-              <span className="odds-badge odds-badge--high">
-                {(output as { approvalLikelihood?: number }).approvalLikelihood}%
-              </span>
-            </div>
-          )}
-          <div className="text-xs">Task completed successfully</div>
-        </div>
+        <Card>
+          <CardHead>{toolHeaders[toolName] ?? toolName.toUpperCase()}</CardHead>
+          <div className="cl">
+            <ClRow label="Result" state={<StatusMark word="received" />} />
+          </div>
+        </Card>
       );
   }
 }
@@ -517,177 +705,153 @@ function ClientToolInteraction({
 
   // Render different UI based on tool
   switch (toolName) {
-    case "uploadDocuments":
+    case "uploadDocuments": {
+      const requiredTypes = (input?.requiredTypes as string[]) ?? [];
+      const criticalDocuments = (input?.criticalDocuments as string[]) ?? [];
       return (
-        <div className="space-y-3">
-          <div className="text-xs text-[#a3a3a3]">
-            Please upload the following documents:
-          </div>
-          <div className="space-y-1">
-            {(input?.requiredTypes as string[])?.slice(0, 5).map((type, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs py-1">
-                <Upload className="w-3 h-3 text-blue-500" />
-                <span className="capitalize">{type.replace("_", " ")}</span>
-                {(input?.criticalDocuments as string[])?.includes(type) && (
-                  <span className="text-xs text-red-400">(Critical)</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={handleAction}
-            disabled={isSubmitting}
-            className="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4" />
-                Upload Documents (Mock)
-              </>
-            )}
-          </button>
-        </div>
+        <FileUpload
+          requiredTypes={requiredTypes}
+          criticalDocuments={criticalDocuments}
+          isSubmitting={isSubmitting}
+          onUpload={(documents) => {
+            setIsSubmitting(true);
+            setTimeout(() => {
+              onOutput(toolCallId, toolName, {
+                success: true,
+                uploadedCount: documents.length,
+                documents,
+              });
+              setIsSubmitting(false);
+            }, 800);
+          }}
+        />
       );
+    }
 
-    case "payFees":
+    case "payFees": {
+      const fees = input as
+        | { visaFee?: number; serviceFee?: number; vacFee?: number; total?: number }
+        | undefined;
       return (
-        <div className="space-y-3">
-          <div className="p-3 bg-[#1f1f1f] rounded text-sm space-y-2">
-            <div className="flex justify-between">
-              <span className="text-[#a3a3a3]">Visa Fee</span>
-              <span>€{(input as { visaFee?: number })?.visaFee || 80}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[#a3a3a3]">Service Fee</span>
-              <span>€{(input as { serviceFee?: number })?.serviceFee || 25}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[#a3a3a3]">VAC Fee</span>
-              <span>€{(input as { vacFee?: number })?.vacFee || 15}</span>
-            </div>
-            <div className="border-t border-[#262626] pt-2 flex justify-between font-medium">
-              <span>Total</span>
-              <span>€{(input as { total?: number })?.total || 120}</span>
-            </div>
-          </div>
-          <button
-            onClick={handleAction}
-            disabled={isSubmitting}
-            className="w-full py-2 px-4 bg-green-500 hover:bg-green-600 disabled:bg-green-500/50 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 text-white"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <CreditCard className="w-4 h-4" />
-                Pay Fees (Mock)
-              </>
-            )}
-          </button>
-        </div>
-      );
-
-    case "submitFiling":
-      return (
-        <div className="space-y-3">
-          <div className="text-xs text-[#a3a3a3]">
-            Review your application before submission:
-          </div>
-          <div className="p-3 bg-[#1f1f1f] rounded text-sm space-y-2">
-            <div className="flex justify-between">
-              <span className="text-[#a3a3a3]">Approval Likelihood</span>
-              <span className="odds-badge odds-badge--high">
-                {typeof input?.approvalLikelihood === "number" ? input.approvalLikelihood : 85}%
+        <Card className="notam">
+          <CardHead>FEES</CardHead>
+          <div className="cl">
+            <ClRow label="Visa fee" state={`€${fees?.visaFee ?? 80}`} />
+            <ClRow label="Service fee" state={`€${fees?.serviceFee ?? 25}`} />
+            <ClRow label="VAC fee" state={`€${fees?.vacFee ?? 15}`} />
+            <div className="cl-row" style={{ fontWeight: 700 }}>
+              <span>TOTAL</span>
+              <span className="dots" />
+              <span
+                className="state"
+                style={{ color: "var(--ink)", fontWeight: 700, fontSize: 11 }}
+              >
+                €{fees?.total ?? 120}
               </span>
             </div>
-            <div className="text-xs text-[#737373]">
-              {(input?.finalRecommendations as Array<{ issue: string }>)?.length || 0} pending recommendations
+            <div
+              style={{
+                borderTop: "1px dashed var(--line)",
+                marginTop: 4,
+                paddingTop: 10,
+              }}
+            >
+              <KeyButton
+                onClick={handleAction}
+                disabled={isSubmitting}
+                submittingLabel="PROCESSING…"
+              >
+                PAY FEES
+              </KeyButton>
             </div>
           </div>
-          <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-400">
-            <strong>Important:</strong> This is a mock submission for demonstration purposes. No actual visa application will be filed.
-          </div>
-          <button
-            onClick={handleAction}
-            disabled={isSubmitting}
-            className="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              <>
-                <FileCheck className="w-4 h-4" />
-                Confirm & Submit (Mock)
-              </>
-            )}
-          </button>
-        </div>
+        </Card>
       );
+    }
 
-    case "provideMissingInsurance":
+    case "submitFiling": {
+      const approvalLikelihood =
+        typeof input?.approvalLikelihood === "number"
+          ? input.approvalLikelihood
+          : 85;
       return (
-        <div className="space-y-3">
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded">
-            <div className="text-xs text-red-400 font-medium mb-1">
-              Request for Evidence (RFE)
+        <Card className="notam">
+          <CardHead>READY TO FILE</CardHead>
+          <div className="cl">
+            <ClRow
+              label="Approval likelihood"
+              state={`${approvalLikelihood}%`}
+            />
+            <div className="poll-detail" style={{ color: "var(--amber)" }}>
+              ▲ Mock submission — no actual visa application will be filed.
             </div>
-            <div className="text-sm">{(input?.rfeDetails as { missingItem: string })?.missingItem}</div>
-            <div className="text-xs text-[#a3a3a3] mt-1">
-              {(input?.rfeDetails as { explanation: string })?.explanation}
+            <div style={{ paddingTop: 8 }}>
+              <KeyButton
+                onClick={handleAction}
+                disabled={isSubmitting}
+                submittingLabel="TRANSMITTING…"
+              >
+                CONFIRM &amp; SUBMIT
+              </KeyButton>
             </div>
           </div>
-          <div className="text-xs text-[#737373]">
-            Deadline: {input?.deadline as string}
-          </div>
-          <button
-            onClick={handleAction}
-            disabled={isSubmitting}
-            className="w-full py-2 px-4 bg-green-500 hover:bg-green-600 disabled:bg-green-500/50 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 text-white"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Shield className="w-4 h-4" />
-                Upload Insurance Document (Mock)
-              </>
-            )}
-          </button>
-        </div>
+        </Card>
       );
+    }
+
+    case "provideMissingInsurance": {
+      const rfeDetails = input?.rfeDetails as
+        | { missingItem?: string; explanation?: string }
+        | undefined;
+      return (
+        <Card className="notam">
+          <CardHead>RFE — INSURANCE REQUIRED</CardHead>
+          <div className="notam-body">
+            <strong>{rfeDetails?.missingItem}</strong>
+            <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
+              {rfeDetails?.explanation}
+            </div>
+            <div
+              className="mono"
+              style={{
+                marginTop: 8,
+                fontSize: 10,
+                letterSpacing: "0.14em",
+                color: "var(--ink2)",
+              }}
+            >
+              DEADLINE {input?.deadline as string}
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <KeyButton
+                onClick={handleAction}
+                disabled={isSubmitting}
+                submittingLabel="TRANSMITTING…"
+              >
+                UPLOAD POLICY
+              </KeyButton>
+            </div>
+          </div>
+        </Card>
+      );
+    }
 
     default:
       return (
-        <div className="text-sm text-[#a3a3a3]">
-          <button
-            onClick={handleAction}
-            disabled={isSubmitting}
-            className="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 rounded-lg text-sm font-medium transition-colors"
-          >
-            {isSubmitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Processing...
-              </span>
-            ) : (
-              "Confirm Action (Mock)"
-            )}
-          </button>
-        </div>
+        <Card className="notam">
+          <CardHead>{toolName.toUpperCase()}</CardHead>
+          <div className="cl">
+            <div style={{ paddingTop: 8 }}>
+              <KeyButton
+                onClick={handleAction}
+                disabled={isSubmitting}
+                submittingLabel="WORKING…"
+              >
+                CONFIRM
+              </KeyButton>
+            </div>
+          </div>
+        </Card>
       );
   }
 }

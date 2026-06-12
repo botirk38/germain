@@ -8,6 +8,9 @@ export type GermainUIMessage = InferAgentUIMessage<GermainAgent>;
 
 export function createGermainAgent(): GermainAgent {
   return new ToolLoopAgent({
+    // Tool-calling model. gemini-3.1-flash-lite is restricted on the gateway
+    // free tier; gpt-oss-120b leaks tool calls as text. gpt-4.1-mini also works
+    // cleanly if a swap is ever needed.
     model: gateway("openai/gpt-5.4-mini"),
     instructions: germainSystemPrompt,
     tools: germainTools,

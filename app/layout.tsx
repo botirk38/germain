@@ -1,10 +1,23 @@
 import type { Metadata } from "next";
+import { B612, B612_Mono } from "next/font/google";
 import "./globals.css";
 
+const b612 = B612({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-b612",
+});
+
+const b612Mono = B612_Mono({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-b612-mono",
+});
+
 export const metadata: Metadata = {
-  title: "Germain — Your AI visa case agent",
+  title: "Attaché — your visa, handled",
   description:
-    "Upload your documents. Choose your visa. Germain prepares the case, fills the forms, tracks follow-ups, and keeps you in control.",
+    "Attaché reviews your documents, fills in the official application, and books your embassy appointment — then keeps checking the consulate until there is a decision.",
 };
 
 export default function RootLayout({
@@ -13,8 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-[#0d0d0d] text-[#f5f5f5]">{children}</body>
+    <html lang="en" className={`${b612.variable} ${b612Mono.variable}`}>
+      <body className="font-sans text-ink">{children}</body>
     </html>
   );
 }
