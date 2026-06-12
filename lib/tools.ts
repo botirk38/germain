@@ -198,7 +198,13 @@ export const reviewDocumentsTool = tool({
 export const generateApplicationTool = tool({
   description: "Generate the visa application form with fields populated from reviewed documents. Checks consistency and returns the form data.",
   inputSchema: z.object({
-    extractedData: z.record(z.record(z.string())).describe("Extracted fields from all documents"),
+    // Loose + optional: a nested record(record(string)) made the model loop
+    // trying to satisfy the shape. The case state already carries the real
+    // extracted fields, so this is best-effort context only.
+    extractedData: z
+      .record(z.unknown())
+      .optional()
+      .describe("Optional map of documentType -> {field: value} extracted from documents"),
     visaCategory: z.enum(["tourist", "business", "student", "work", "family", "transit"]),
     destinationCountry: z.string(),
   }),
@@ -212,10 +218,11 @@ export const generateApplicationTool = tool({
     nextStep: z.literal("prepareSupportingPack"),
   }),
   execute: async ({ extractedData, visaCategory }, _options: ToolExecutionOptions) => {
-    const passport = extractedData.passport || {};
-    const bank = extractedData.bank_statement || {};
-    const employment = extractedData.employment_letter || {};
-    const hotel = extractedData.hotel_booking || {};
+    const data = (extractedData ?? {}) as Record<string, Record<string, string> | undefined>;
+    const passport = data.passport ?? {};
+    const bank = data.bank_statement ?? {};
+    const employment = data.employment_letter ?? {};
+    const hotel = data.hotel_booking ?? {};
 
     const formData = {
       fullName: passport.nationality === "USA" ? "John Doe" : "Applicant Name",
