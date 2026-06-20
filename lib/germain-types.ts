@@ -34,6 +34,7 @@ export const WORKFLOW_STEPS: { key: CaseStatus; label: string; oddsContribution:
 
 export type DocumentType =
   | "passport"
+  | "photo"
   | "bank_statement"
   | "employment_letter"
   | "insurance"
@@ -48,7 +49,7 @@ export type GermainDocument = {
   id: string;
   name: string;
   type: DocumentType;
-  status: "missing" | "uploaded" | "needs_review" | "verified";
+  status: "missing" | "uploaded" | "needs_review" | "verified" | "rejected";
   extractedData?: Record<string, string>;
   riskFlags?: string[];
 };

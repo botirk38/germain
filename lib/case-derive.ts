@@ -1,7 +1,6 @@
 import { isToolUIPart, getToolName } from "ai";
 import type { GermainUIMessage } from "./agents/germain";
 import type { GermainCase, Recommendation, CaseStatus, GermainDocument, GermainTimelineEvent } from "./germain-types";
-// Types are inferred from usage, no explicit import needed
 
 const BASE_APPROVAL_LIKELIHOOD = 35;
 
@@ -50,12 +49,10 @@ function calculateApprovalLikelihood(
   recommendations: Recommendation[],
   status: CaseStatus
 ): number {
-  // Sum impacts of resolved recommendations
   const resolvedImpact = recommendations
     .filter((r) => r.resolved)
     .reduce((sum, r) => sum + r.impact, 0);
 
-  // Status-based bonuses
   const statusBonus: Record<CaseStatus, number> = {
     intake: 0,
     route_selected: 5,
@@ -83,14 +80,25 @@ function deriveNextStatus(
   toolOutput: Record<string, unknown>
 ): CaseStatus {
   const statusFlow: Record<string, CaseStatus> = {
+    // Consolidated tools
+    evaluateCase: "checklist_ready",
+    uploadDocuments: "documents_reviewed",
+    reviewAndPrepare: "pack_ready",
+    runRiskReview: "review_passed",
+    submitApplication: "submitted",
+    approveSubmission: "submitted",
+    monitorCase: toolOutput.status === "rfe_issued"
+      ? "awaiting_biometrics"
+      : toolOutput.status === "decision_made"
+        ? "decision_ready"
+        : "processing",
+    // Legacy tool names (for backward compatibility with existing messages)
     assessEligibility: "route_selected",
     recommendVisaRoute: "checklist_ready",
     buildChecklist: "checklist_ready",
-    uploadDocuments: "documents_reviewed",
     reviewDocuments: "documents_reviewed",
     generateApplication: "form_ready",
     prepareSupportingPack: "pack_ready",
-    runRiskReview: "review_passed",
     bookAppointment: "appointment_set",
     payFees: "fees_paid",
     submitFiling: "submitted",
@@ -111,6 +119,209 @@ function applyToolOutput(
   const updates: Partial<GermainCase> = {};
 
   switch (toolName) {
+    // ===== Consolidated tools =====
+
+    case "evaluateCase": {
+      updates.visaType = output.visaType as string;
+      updates.destinationCountry = (output.fees as Record<string, unknown>)
+        ? state.destinationCountry
+        : "";
+
+      if (output.baseLikelihood) {
+        updates.approvalLikelihood = output.baseLikelihood as number;
+      }
+
+      // Set fees from evaluateCase
+      const fees = output.fees as Record<string, number> | undefined;
+      if (fees) {
+        updates.fees = {
+          visaFee: fees.visa ?? 0,
+          serviceFee: fees.service ?? 0,
+          vacFee: fees.vac ?? 0,
+          total: fees.total ?? 0,
+          paid: false,
+        };
+      }
+
+      // Set documents from checklist
+      const required = (output.requiredDocuments as Array<{ type: string; description: string; critical: boolean }>) || [];
+      updates.documents = required.map((doc, i) => ({
+        id: `doc-${i}`,
+        name: doc.description,
+        type: doc.type as GermainDocument["type"],
+        status: "missing" as const,
+      }));
+
+      // Capture destination country
+      if (output.consulate) {
+        const consulateStr = output.consulate as string;
+        // Extract destination country from consulate string if available
+        updates.destinationCountry = consulateStr.split(" ")[0] || state.destinationCountry;
+      }
+
+      break;
+    }
+
+    case "uploadDocuments": {
+      const uploaded = (output.documents as Array<{ type: string; name?: string }>) || [];
+      if (uploaded.length) {
+        const byType = new Map(uploaded.map((u) => [u.type, u]));
+        updates.documents = state.documents.map((d) =>
+          byType.has(d.type)
+            ? { ...d, status: "uploaded" as const, name: byType.get(d.type)?.name || d.name }
+            : d
+        );
+      }
+      break;
+    }
+
+    case "reviewAndPrepare": {
+      // Update documents from review results
+      const reviews = (output.documentReviews as Array<{
+        type: string;
+        status: string;
+        extractedFields: Record<string, string>;
+        issues: Array<{ message: string }>;
+      }>) || [];
+
+      if (reviews.length) {
+        const reviewByType = new Map(reviews.map((r) => [r.type, r]));
+        updates.documents = state.documents.map((d) => {
+          const review = reviewByType.get(d.type);
+          if (review) {
+            return {
+              ...d,
+              status: review.status as GermainDocument["status"],
+              extractedData: review.extractedFields,
+              riskFlags: review.issues.map((i) => i.message),
+            };
+          }
+          return d;
+        });
+      }
+
+      // Merge recommendations
+      const newRecs = (output.recommendations as Recommendation[]) || [];
+      const existingIds = new Set(state.recommendations.map((r) => r.id));
+      const freshRecs = newRecs.filter((r) => !existingIds.has(r.id));
+      updates.recommendations = [...state.recommendations, ...freshRecs];
+
+      // Update form completion
+      updates.formCompletion = output.formData ? 100 : state.formCompletion;
+
+      // Update applicant from form data
+      const formData = output.formData as Record<string, string> | undefined;
+      if (formData) {
+        updates.applicant = {
+          ...state.applicant,
+          fullName: formData.fullName || state.applicant.fullName,
+          nationality: formData.nationality || state.applicant.nationality,
+        };
+        updates.travel = {
+          ...state.travel,
+          purpose: (formData.purposeOfTravel as GermainCase["travel"]["purpose"]) || state.travel.purpose,
+          arrivalDate: formData.arrivalDate || state.travel.arrivalDate,
+          departureDate: formData.departureDate || state.travel.departureDate,
+          destinationCity: formData.destinationCity || state.travel.destinationCity,
+        };
+      }
+
+      break;
+    }
+
+    case "runRiskReview": {
+      const finalRecs = (output.finalRecommendations as Recommendation[]) || [];
+      const existingIds = new Set(state.recommendations.map((r) => r.id));
+      const newRecs = finalRecs.filter((r) => !existingIds.has(r.id));
+      updates.recommendations = [...state.recommendations, ...newRecs];
+      break;
+    }
+
+    case "submitApplication": {
+      const refNum = (output.referenceNumber as string) || `ATT-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+      updates.referenceNumber = refNum;
+      updates.fees = { ...state.fees, paid: true };
+
+      // Appointment details
+      const appointment = output.appointmentDetails as Record<string, string> | undefined;
+      if (appointment) {
+        updates.appointments = [
+          ...state.appointments,
+          {
+            type: "biometrics" as const,
+            date: appointment.date,
+            time: appointment.time,
+            location: appointment.location,
+            confirmed: true,
+          },
+        ];
+      }
+
+      updates.timeline = [
+        ...(state.timeline || []),
+        {
+          title: "Application Submitted",
+          description: `Reference: ${refNum}`,
+          time: new Date().toISOString(),
+          status: "complete",
+        },
+      ];
+      break;
+    }
+
+    case "approveSubmission": {
+      if (output.approved) {
+        updates.timeline = [
+          ...(state.timeline || []),
+          {
+            title: "Submission Approved by User",
+            description: (output.userNote as string) || "User approved the application for submission.",
+            time: new Date().toISOString(),
+            status: "complete",
+          },
+        ];
+      }
+      break;
+    }
+
+    case "monitorCase": {
+      if (output.status === "rfe_issued" && output.rfeDetails) {
+        const rfe = output.rfeDetails as { explanation: string; deadline?: string };
+        updates.embassyFollowUps = [
+          ...(state.embassyFollowUps || []),
+          {
+            type: "rfe" as const,
+            description: rfe.explanation || "Additional documents required",
+            deadline: rfe.deadline,
+            responded: false,
+          },
+        ];
+      } else if (output.status === "biometrics_scheduled") {
+        updates.embassyFollowUps = [
+          ...(state.embassyFollowUps || []),
+          {
+            type: "biometrics_scheduled" as const,
+            description: (output.summary as string) || "Biometrics appointment scheduled",
+            responded: true,
+          },
+        ];
+      } else if (output.status === "decision_made" && output.decision) {
+        const decision = output.decision as Record<string, unknown>;
+        updates.timeline = [
+          ...(state.timeline || []),
+          {
+            title: decision.outcome === "approved" ? "Visa Approved" : "Decision Received",
+            description: `Outcome: ${decision.outcome as string}`,
+            time: new Date().toISOString(),
+            status: decision.outcome === "approved" ? "complete" : "alert",
+          } as GermainTimelineEvent,
+        ];
+      }
+      break;
+    }
+
+    // ===== Legacy tool names (backward compatibility) =====
+
     case "assessEligibility": {
       if (output.eligible) {
         updates.visaType = output.visaType as string;
@@ -130,7 +341,6 @@ function applyToolOutput(
     }
 
     case "buildChecklist": {
-      // Convert checklist to document stubs
       const required = (output.requiredDocuments as Array<{ type: string; description: string; critical: boolean }>) || [];
       updates.documents = required.map((doc, i) => ({
         id: `doc-${i}`,
@@ -141,27 +351,9 @@ function applyToolOutput(
       break;
     }
 
-    case "uploadDocuments": {
-      // Fold the user's uploaded files into the checklist stubs so the
-      // DOCUMENTS panel reflects what was attached (status: uploaded).
-      const uploaded =
-        (output.documents as Array<{ type: string; name?: string }>) || [];
-      if (uploaded.length) {
-        const byType = new Map(uploaded.map((u) => [u.type, u]));
-        updates.documents = state.documents.map((d) =>
-          byType.has(d.type)
-            ? { ...d, status: "uploaded" as const, name: byType.get(d.type)?.name || d.name }
-            : d
-        );
-      }
-      break;
-    }
-
     case "reviewDocuments": {
       const docId = output.documentId as string;
       const recommendations = (output.recommendations as Recommendation[]) || [];
-
-      // Update document status
       updates.documents = state.documents.map((d) =>
         d.id === docId
           ? {
@@ -172,13 +364,9 @@ function applyToolOutput(
             }
           : d
       );
-
-      // Merge new recommendations
       const existingIds = new Set(state.recommendations.map((r) => r.id));
       const newRecs = recommendations.filter((r) => !existingIds.has(r.id));
       updates.recommendations = [...state.recommendations, ...newRecs];
-
-      // Update financials from bank statement
       if (output.extractedFields && (output.extractedFields as Record<string, string>).balance) {
         const balance = parseFloat((output.extractedFields as Record<string, string>).balance);
         updates.financials = {
@@ -208,18 +396,8 @@ function applyToolOutput(
       break;
     }
 
-    case "prepareSupportingPack": {
-      // Supporting pack is ready - no state changes needed, just status advance
+    case "prepareSupportingPack":
       break;
-    }
-
-    case "runRiskReview": {
-      const finalRecs = (output.finalRecommendations as Recommendation[]) || [];
-      const existingIds = new Set(state.recommendations.map((r) => r.id));
-      const newRecs = finalRecs.filter((r) => !existingIds.has(r.id));
-      updates.recommendations = [...state.recommendations, ...newRecs];
-      break;
-    }
 
     case "bookAppointment": {
       updates.appointments = [
@@ -236,10 +414,7 @@ function applyToolOutput(
     }
 
     case "payFees": {
-      updates.fees = {
-        ...state.fees,
-        paid: true,
-      };
+      updates.fees = { ...state.fees, paid: true };
       break;
     }
 
@@ -282,7 +457,6 @@ function applyToolOutput(
     }
 
     case "provideMissingInsurance": {
-      // Mark RFE as responded
       updates.embassyFollowUps = state.embassyFollowUps.map((f) =>
         f.type === "rfe" ? { ...f, responded: true } : f
       );

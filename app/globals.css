@@ -23,56 +23,73 @@
   --font-mono: var(--font-b612-mono), "B612 Mono", monospace;
 }
 
-/* ---------- raw CSS tokens (used by ported component rules below) ---------- */
+/* ---------- raw CSS tokens (aligned with design system spec) ---------- */
 :root {
-  /* aliases matching attache.css so ported rules work verbatim */
+  /* base palette */
+  --bone: #ece7dd;
   --paper: #ece7dd;
   --panel: #f3efe6;
   --panel-dk: #e3ddcf;
+  --panel-2: #eee9dd;
+  --console: #e3ddcf;
   --ink: #3a4754;
   --ink2: #7b8794;
-  --ink-2: #7b8794; /* landing spells it with a dash */
+  --ink-2: #7b8794;
+  --ink-3: #a39e90;
   --sage: #7a9484;
   --amber: #b89a68;
   --clay: #b07d6a;
   --brass: #a98e5f;
   --line: rgba(58, 71, 84, 0.18);
+  --line-soft: rgba(58, 71, 84, 0.10);
   --inset: #2e3640;
+  --slate-dark: #2e3640;
   --mist: #c8d3cd;
 
-  /* extra surface + text tokens (referenced by the landing styles) */
-  --bone: #f8f4ea;
-  --console: #e3ddcf;
-  --panel-2: #e9e3d4;
-  --surface-page: #ece7dd;
-  --slate-dark: #2e3640;
-  --ink-3: #9aa4ad;
-  --line-soft: rgba(58, 71, 84, 0.1);
-  --text-body: #3a4754;
-  --text-secondary: #5d6b78;
-  --text-faint: #7b8794;
-  --tint-good: rgba(122, 148, 132, 0.08);
-  --tint-problem: rgba(176, 125, 106, 0.08);
+  /* semantic aliases */
+  --surface-page: var(--bone);
+  --surface-card: var(--panel);
+  --surface-recessed: var(--panel-2);
+  --surface-console: var(--console);
+  --surface-machine: var(--slate-dark);
+  --text-body: var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-faint: var(--ink-3);
+  --text-on-machine: var(--mist);
+  --status-good: var(--sage);
+  --status-attention: var(--amber);
+  --status-problem: var(--clay);
+  --accent: var(--brass);
 
-  /* faint linen texture */
-  --texture-linen: repeating-linear-gradient(
-      0deg,
-      rgba(58, 71, 84, 0.025) 0 1px,
-      transparent 1px 3px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(58, 71, 84, 0.02) 0 1px,
-      transparent 1px 3px
-    );
+  /* tints */
+  --tint-good: rgba(122, 148, 132, 0.08);
+  --tint-attention: rgba(184, 154, 104, 0.08);
+  --tint-problem: rgba(176, 125, 106, 0.06);
+  --tint-accent: rgba(169, 142, 95, 0.06);
+
+  /* spacing scale */
+  --s1: 4px; --s2: 6px; --s3: 8px; --s4: 12px; --s5: 16px; --s6: 24px; --s7: 40px; --s8: 64px;
+
+  /* radii */
+  --radius-1: 2px;
+  --radius-2: 4px;
+  --radius-3: 5px;
+  --radius-round: 50%;
 
   /* shadows */
-  --shadow-card: 0 1px 0 rgba(58, 71, 84, 0.06),
-    0 10px 24px -20px rgba(58, 71, 84, 0.5);
-  --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  --shadow-key: 0 2px 0 rgba(169, 142, 95, 0.55),
-    0 3px 6px rgba(58, 71, 84, 0.12);
-  --shadow-machine: inset 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 1px 2px rgba(58, 71, 84, 0.08), 0 6px 18px rgba(58, 71, 84, 0.05);
+  --shadow-machine: 0 1px 3px rgba(46, 54, 64, 0.35), 0 10px 26px rgba(46, 54, 64, 0.25);
+  --shadow-key: 0 2px 0 rgba(169, 142, 95, 0.45), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  --shadow-inset-top: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+
+  /* lamp glows */
+  --glow-good: 0 0 5px rgba(122, 148, 132, 0.5);
+  --glow-attention: 0 0 5px rgba(184, 154, 104, 0.5);
+  --glow-problem: 0 0 5px rgba(176, 125, 106, 0.55);
+  --glow-accent: 0 0 6px rgba(169, 142, 95, 0.7);
+
+  /* linen texture */
+  --texture-linen: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
 
   /* font fallbacks for ported rules (next/font vars resolve on <html>) */
   --font-sans: var(--font-b612), "B612", sans-serif;
