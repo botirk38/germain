@@ -65,26 +65,18 @@ export default function GermainPage() {
           output: result.output,
         });
         break;
-      case "payFees":
+      case "submitApplication":
         addToolOutput({
           toolCallId: result.toolCallId,
-          tool: "payFees",
+          tool: "submitApplication",
           state: "output-available",
           output: result.output,
         });
         break;
-      case "submitFiling":
+      case "approveSubmission":
         addToolOutput({
           toolCallId: result.toolCallId,
-          tool: "submitFiling",
-          state: "output-available",
-          output: result.output,
-        });
-        break;
-      case "provideMissingInsurance":
-        addToolOutput({
-          toolCallId: result.toolCallId,
-          tool: "provideMissingInsurance",
+          tool: "approveSubmission",
           state: "output-available",
           output: result.output,
         });

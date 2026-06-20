@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
+import { SignInButton, UserButton } from "@clerk/nextjs";
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { HeroMock } from "@/components/landing/HeroMock";
 
 export const metadata: Metadata = {
-  title: "Attaché — your visa, handled",
+  title: "Attache — your visa, handled",
 };
 
-// Marketing landing page — warm analog brand. Ported 1:1 from the
-// Attaché Landing reference; styles live in app/globals.css under the
-// landing section (element rules are scoped to .landing).
-export default function Home() {
+export default async function Home() {
+  const { userId } = await auth();
+  const isSignedIn = Boolean(userId);
+
   return (
     <div className="landing">
       {/* ================= NAV ================= */}
@@ -18,7 +20,7 @@ export default function Home() {
         <div className="wrap">
           <a className="lockup" href="#top">
             <MonogramLogo size={34} className="mark" />
-            <span className="wm">ATTACHÉ</span>
+            <span className="wm">ATTACHE</span>
           </a>
           <nav>
             <a className="link" href="#how">
@@ -27,9 +29,25 @@ export default function Home() {
             <a className="link" href="#status">
               Always informed
             </a>
-            <Link className="key" href="/chat">
-              Open the console
-            </Link>
+            {isSignedIn ? (
+              <>
+                <Link className="key" href="/chat">
+                  Open the console
+                </Link>
+                <UserButton />
+              </>
+            ) : (
+              <>
+                <SignInButton mode="modal">
+                  <button type="button" className="link">
+                    Sign in
+                  </button>
+                </SignInButton>
+                <Link className="key" href="/sign-up">
+                  Get started
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -41,14 +59,20 @@ export default function Home() {
             <div className="kicker">AI VISA AGENT</div>
             <h1>Your visa, handled.</h1>
             <p className="sub">
-              Attaché reviews your documents, fills in the official
+              Attache reviews your documents, fills in the official
               application, and books your embassy appointment — then keeps
               checking the consulate until there&rsquo;s a decision.
             </p>
             <div className="cta">
-              <Link className="key" href="/chat">
-                Open the console
-              </Link>
+              {isSignedIn ? (
+                <Link className="key" href="/chat">
+                  Open the console
+                </Link>
+              ) : (
+                <Link className="key" href="/sign-up">
+                  Get started
+                </Link>
+              )}
               <a className="quiet" href="#how">
                 How it works
               </a>
@@ -58,7 +82,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* static miniature of the product */}
           <HeroMock />
         </div>
       </section>
@@ -69,7 +92,7 @@ export default function Home() {
           <div className="sec-kicker">HOW IT WORKS</div>
           <h2>Three jobs, handled end to end.</h2>
           <p className="sec-sub">
-            You upload what you have. Attaché does the rest — and explains
+            You upload what you have. Attache does the rest — and explains
             every step in plain words.
           </p>
 
@@ -180,9 +203,15 @@ export default function Home() {
             application filed, appointment booked.
           </p>
           <div className="cta">
-            <Link className="key" href="/chat">
-              Open the console
-            </Link>
+            {isSignedIn ? (
+              <Link className="key" href="/chat">
+                Open the console
+              </Link>
+            ) : (
+              <Link className="key" href="/sign-up">
+                Get started
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -193,10 +222,10 @@ export default function Home() {
           <a className="lockup" href="#top">
             <MonogramLogo size={26} />
             <span className="wm" style={{ fontSize: 14 }}>
-              ATTACHÉ
+              ATTACHE
             </span>
           </a>
-          <span className="fineprint">ATTACHÉ · AI VISA AGENT</span>
+          <span className="fineprint">ATTACHE · AI VISA AGENT</span>
         </div>
       </footer>
     </div>

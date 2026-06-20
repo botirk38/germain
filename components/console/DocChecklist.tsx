@@ -7,6 +7,7 @@ const DOC_LAMP_STATE: Record<GermainDocument["status"], string> = {
   uploaded: "received",
   needs_review: "caution",
   verified: "go",
+  rejected: "fail",
 };
 
 // Document checklist with status lamps. Status is always mark + word.

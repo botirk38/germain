@@ -73,6 +73,8 @@ export function docStatusWord(s: GermainDocument["status"]): StatusWord {
       return "check";
     case "verified":
       return "verified";
+    case "rejected":
+      return "problem";
   }
 }
 
@@ -119,9 +121,8 @@ export function splitFlapWord(status: CaseStatus): string {
 
 export const CLIENT_TOOLS = [
   "uploadDocuments",
-  "payFees",
-  "submitFiling",
-  "provideMissingInsurance",
+  "submitApplication",
+  "approveSubmission",
 ] as const;
 
 // Recommendations are deliberately ignored here: nothing in this codebase ever

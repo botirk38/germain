@@ -6,6 +6,9 @@ import { germainSystemPrompt } from "../prompts";
 
 const germainCallOptionsSchema = z.object({
   caseContext: z.string(),
+  userId: z.string(),
+  orgId: z.string().optional(),
+  userProfile: z.record(z.unknown()).optional(),
 });
 
 export type GermainCallOptions = z.infer<typeof germainCallOptionsSchema>;
@@ -24,10 +27,15 @@ export function createGermainAgent(): GermainAgent {
     model: gateway("openai/gpt-5.4-mini"),
     callOptionsSchema: germainCallOptionsSchema,
     instructions: germainSystemPrompt,
-    prepareCall: ({ options, instructions, ...settings }) => ({
-      ...settings,
-      instructions: `${instructions}\n\n${options.caseContext}`,
-    }),
+    prepareCall: ({ options, instructions, ...settings }) => {
+      const profileSection = options.userProfile
+        ? `\n\nUser profile (from onboarding):\n${JSON.stringify(options.userProfile, null, 2)}`
+        : "";
+      return {
+        ...settings,
+        instructions: `${instructions}\n\n${options.caseContext}${profileSection}`,
+      };
+    },
     tools: germainTools,
     stopWhen: [
       stepCountIs(20),
