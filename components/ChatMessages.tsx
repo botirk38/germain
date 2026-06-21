@@ -1,100 +1,90 @@
 "use client";
 
-import type { GermainUIMessage } from "@/lib/agents/germain";
-import type { GermainClientToolResult } from "@/lib/tools";
-import {
-  EvaluateCaseToolPart,
-  ReviewAndPrepareToolPart,
-  RunRiskReviewToolPart,
-  MonitorCaseToolPart,
-  UploadDocumentsToolPart,
-  UploadDocumentToolPart,
-  SubmitApplicationToolPart,
-  ApproveSubmissionToolPart,
-} from "./ToolCard";
-import { Markdown } from "./attache/Markdown";
+import type { EveMessage, InputResponse } from "eve/client";
 import { Fragment } from "react";
-import { isTextUIPart, isToolUIPart } from "ai";
+import { Markdown } from "./attache/Markdown";
+import { DynamicToolPart } from "./ToolCard";
+
+type UploadedDocument = {
+  readonly id: string;
+  readonly type: string;
+  readonly name: string;
+  readonly status: "uploaded";
+};
 
 interface ChatMessagesProps {
-  messages: GermainUIMessage[];
-  status: string;
-  onToolOutput: (result: GermainClientToolResult) => void;
+  readonly messages: readonly EveMessage[];
+  readonly status: string;
+  readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
+  readonly onInputResponse: (response: InputResponse) => void;
 }
 
-function hasVisibleContent(parts: GermainUIMessage["parts"]): boolean {
-  if (!parts) return false;
-  return parts.some(
-    (p) => (isTextUIPart(p) && Boolean(p.text)) || isToolUIPart(p),
-  );
+function userText(message: EveMessage): string {
+  return message.parts
+    .filter((part): part is Extract<(typeof message.parts)[number], { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("");
 }
 
-export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesProps) {
+function hasVisibleContent(message: EveMessage): boolean {
+  return message.parts.some((part) => {
+    if (part.type === "text") return Boolean(part.text);
+    return part.type === "dynamic-tool";
+  });
+}
+
+export function ChatMessages({ messages, status, onDocuments, onInputResponse }: ChatMessagesProps) {
   return (
     <div className="feed">
       {messages.map((message) => (
         <Fragment key={message.id}>
-          {message.role === "user" && (
+          {message.role === "user" ? (
             <div className="msg user">
-              <div className="bubble">
-                {message.parts
-                  ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
-                  .map((p) => p.text)
-                  .join("") ?? ""}
-              </div>
+              <div className="bubble">{userText(message)}</div>
             </div>
-          )}
+          ) : null}
 
-          {message.role === "assistant" && hasVisibleContent(message.parts) && (
+          {message.role === "assistant" && hasVisibleContent(message) ? (
             <div className="msg">
               <div className="callsign" aria-hidden="true">
                 A
               </div>
               <div className="body">
-                {message.parts?.map((part, i) => {
-                  const key = `${message.id}-${i}`;
-                  switch (part.type) {
-                    case "text":
-                      return part.text ? <Markdown key={key} text={part.text} /> : null;
-                    case "tool-evaluateCase":
-                      return <EvaluateCaseToolPart key={key} part={part} />;
-                    case "tool-reviewAndPrepare":
-                      return <ReviewAndPrepareToolPart key={key} part={part} />;
-                    case "tool-runRiskReview":
-                      return <RunRiskReviewToolPart key={key} part={part} />;
-                    case "tool-monitorCase":
-                      return <MonitorCaseToolPart key={key} part={part} />;
-                    case "tool-uploadDocuments":
-                      return <UploadDocumentsToolPart key={key} part={part} onOutput={onToolOutput} />;
-                    case "tool-uploadDocument":
-                      return <UploadDocumentToolPart key={key} part={part} onOutput={onToolOutput} />;
-                    case "tool-submitApplication":
-                      return <SubmitApplicationToolPart key={key} part={part} onOutput={onToolOutput} />;
-                    case "tool-approveSubmission":
-                      return <ApproveSubmissionToolPart key={key} part={part} onOutput={onToolOutput} />;
-                    default:
-                      return null;
+                {message.parts.map((part, index) => {
+                  const key = `${message.id}-${index}`;
+                  if (part.type === "text") {
+                    return part.text ? <Markdown key={key} text={part.text} /> : null;
                   }
+                  if (part.type === "dynamic-tool") {
+                    return (
+                      <DynamicToolPart
+                        key={key}
+                        part={part}
+                        onDocuments={onDocuments}
+                        onInputResponse={onInputResponse}
+                      />
+                    );
+                  }
+                  return null;
                 })}
               </div>
             </div>
-          )}
+          ) : null}
         </Fragment>
       ))}
 
-      {/* Streaming indicator */}
-      {status === "streaming" && (
+      {status === "streaming" ? (
         <div className="msg typing">
           <div className="callsign" aria-hidden="true">
             A
           </div>
           <div className="body">
             <span className="t">
-              ATTACHÉ IS TYPING <span className="cursor">▌</span>
+              ATTACHE IS TYPING <span className="cursor">▌</span>
             </span>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

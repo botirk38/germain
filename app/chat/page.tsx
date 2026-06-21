@@ -1,174 +1,164 @@
 "use client";
 
-import { useChat, Chat } from "@ai-sdk/react";
-import { lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport, getToolName, isToolUIPart } from "ai";
-import type { GermainUIMessage } from "@/lib/agents/germain";
-import type { GermainClientToolName, GermainClientToolResult } from "@/lib/tools";
-import { deriveCase, initialCaseState } from "@/lib/case-derive";
-import { getDisplayStepIndex, deriveActionNeeded } from "@/lib/attache-display";
-import { ChatMessages } from "@/components/ChatMessages";
-import { EmptyState } from "@/components/EmptyState";
-import { MonogramLogo } from "@/components/attache/MonogramLogo";
-import { CaseStrip } from "@/components/console/CaseStrip";
-import { ProgressRoute } from "@/components/console/ProgressRoute";
-import { DocChecklist } from "@/components/console/DocChecklist";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import type { InputResponse } from "eve/client";
+import { useAttacheAgent } from "./use-attache-agent";
+import { actionNeeded as caseActionNeeded, getDisplayStepIndex } from "@/components/attache/display";
 import { CaseFacts } from "@/components/console/CaseFacts";
-import { SplitFlap } from "@/components/console/SplitFlap";
+import { CaseStrip } from "@/components/console/CaseStrip";
 import { CautionLamp } from "@/components/console/CautionLamp";
-import { useState, type FormEvent, type ChangeEvent, type KeyboardEvent, useMemo } from "react";
+import { DocChecklist } from "@/components/console/DocChecklist";
+import { ProgressRoute } from "@/components/console/ProgressRoute";
+import { SplitFlap } from "@/components/console/SplitFlap";
+import { EmptyState } from "@/components/EmptyState";
+import { ChatMessages } from "@/components/ChatMessages";
+import { MonogramLogo } from "@/components/attache/MonogramLogo";
 
-const clientToolNames = new Set([
-  "uploadDocuments",
-  "uploadDocument",
-  "submitApplication",
-  "approveSubmission",
-]);
+type UploadedDocument = {
+  readonly id: string;
+  readonly type: string;
+  readonly name: string;
+  readonly status: "uploaded";
+};
 
-const userMessageCancellation = "Cancelled because the user sent a new message.";
+const PROFILE_STORAGE_KEY = "attache:onboarding-profile";
+const PROFILE_STORAGE_VERSION = 1;
+const PROFILE_STORAGE_TTL_MS = 30 * 60 * 1000;
 
-function isClientToolName(toolName: string): toolName is GermainClientToolName {
-  return clientToolNames.has(toolName);
+type StoredOnboardingProfile = {
+  readonly version: typeof PROFILE_STORAGE_VERSION;
+  readonly createdAt: number;
+  readonly profile: Record<string, string | number | boolean>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function getPendingClientTools(messages: GermainUIMessage[]) {
-  return messages.flatMap((message) => {
-    if (message.role !== "assistant") return [];
+function readStoredOnboardingProfile(): StoredOnboardingProfile | undefined {
+  const raw = window.sessionStorage.getItem(PROFILE_STORAGE_KEY);
+  if (!raw) return undefined;
 
-    return (message.parts ?? []).flatMap((part) => {
-      if (!isToolUIPart(part)) return [];
-
-      const toolName = getToolName(part);
-      if (!isClientToolName(toolName)) return [];
-      if (part.state !== "input-streaming" && part.state !== "input-available") return [];
-
-      return [{ tool: toolName, toolCallId: part.toolCallId }];
-    });
-  });
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return undefined;
+    if (parsed.version !== PROFILE_STORAGE_VERSION) return undefined;
+    if (typeof parsed.createdAt !== "number" || Date.now() - parsed.createdAt > PROFILE_STORAGE_TTL_MS) {
+      window.sessionStorage.removeItem(PROFILE_STORAGE_KEY);
+      return undefined;
+    }
+    if (!isRecord(parsed.profile)) return undefined;
+    if (
+      !Object.values(parsed.profile).every(
+        (value) => typeof value === "string" || typeof value === "number" || typeof value === "boolean",
+      )
+    ) {
+      return undefined;
+    }
+    return parsed as StoredOnboardingProfile;
+  } catch {
+    return undefined;
+  }
 }
 
-function shouldContinueAfterToolOutput({ messages }: { messages: GermainUIMessage[] }) {
-  const message = messages[messages.length - 1];
-  const cancelledByUserMessage = message?.role === "assistant" && message.parts?.some((part) => {
-    return isToolUIPart(part) && part.state === "output-error" && part.errorText === userMessageCancellation;
-  });
-
-  return !cancelledByUserMessage && lastAssistantMessageIsCompleteWithToolCalls({ messages });
+function hasPendingHumanInput(messages: ReturnType<typeof useAttacheAgent>["data"]["messages"]): boolean {
+  return messages.some(
+    (message) =>
+      message.role === "assistant" &&
+      message.parts.some((part) => part.type === "dynamic-tool" && part.state === "approval-requested"),
+  );
 }
 
-// Create transport singleton
-const chatTransport = new DefaultChatTransport<GermainUIMessage>({
-  api: "/api/chat",
-});
+function documentsMessage(documents: readonly UploadedDocument[]): string {
+  const lines = documents.map((document) => `- ${document.type}: ${document.name}`).join("\n");
+  return `I uploaded these documents. Please call record_documents for them:\n${lines}`;
+}
 
-// Create chat instance
-const germainChat = new Chat<GermainUIMessage>({
-  transport: chatTransport,
-  sendAutomaticallyWhen: shouldContinueAfterToolOutput,
-});
+function onboardingMessage(profile: StoredOnboardingProfile["profile"]): string {
+  return `I completed the quick onboarding form. Please call save_profile with these fields, then start my visa plan:\n${JSON.stringify(profile, null, 2)}`;
+}
 
-export default function GermainPage() {
+export default function AttachePage() {
   const [input, setInput] = useState("");
-
-  const {
-    messages,
-    status,
-    error,
-    sendMessage,
-    regenerate,
-    addToolOutput,
-  } = useChat<GermainUIMessage>({
-    chat: germainChat,
-  });
-
-  // "error" must not lock the composer — only an in-flight request does.
-  const requestBusy = status === "submitted" || status === "streaming";
-  const pendingClientTools = useMemo(() => getPendingClientTools(messages), [messages]);
-  const awaitingToolAction = pendingClientTools.length > 0;
-  const busy = requestBusy;
-
-  // Derive live case state from message history
-  const caseState = useMemo(() => {
-    return messages.length > 0 ? deriveCase(messages) : initialCaseState;
-  }, [messages]);
-
-  const displayStepIndex = getDisplayStepIndex(caseState.status);
-  const actionNeeded = useMemo(() => deriveActionNeeded(messages, caseState), [messages, caseState]);
+  const sentOnboardingProfile = useRef(false);
+  const agent = useAttacheAgent();
+  const messages = agent.data.messages;
+  const caseState = agent.caseState;
+  const requestBusy = agent.status === "submitted" || agent.status === "streaming";
+  const pendingHumanInput = hasPendingHumanInput(messages);
   const hasMessages = messages.length > 0;
+  const displayStepIndex = getDisplayStepIndex(caseState.status);
+  const actionNeeded = caseActionNeeded(caseState) || pendingHumanInput;
 
-  const handleToolOutput = (result: GermainClientToolResult) => {
-    switch (result.kind) {
-      case "error":
-        addToolOutput({
-          tool: result.tool,
-          toolCallId: result.toolCallId,
-          state: "output-error",
-          errorText: result.errorText,
-        });
-        return;
-      case "output":
-        addToolOutput({
-          tool: result.tool,
-          toolCallId: result.toolCallId,
-          state: "output-available",
-          output: result.output,
-        });
-        return;
-    }
+  useEffect(() => {
+    if (sentOnboardingProfile.current || requestBusy || messages.length > 0) return;
+
+    const storedProfile = readStoredOnboardingProfile();
+    if (!storedProfile) return;
+
+    sentOnboardingProfile.current = true;
+    void agent
+      .send({
+        message: onboardingMessage(storedProfile.profile),
+        clientContext: { onboardingProfile: storedProfile.profile },
+      })
+      .then(() => window.sessionStorage.removeItem(PROFILE_STORAGE_KEY))
+      .catch(() => {
+        sentOnboardingProfile.current = false;
+      });
+  }, [agent, messages.length, requestBusy]);
+
+  const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(event.target.value);
   };
 
-  const cancelPendingClientTools = async (errorText: string) => {
-    await Promise.all(
-      pendingClientTools.map((pendingTool) =>
-        addToolOutput({
-          tool: pendingTool.tool,
-          toolCallId: pendingTool.toolCallId,
-          state: "output-error",
-          errorText,
-        }),
-      ),
-    );
+  const sendText = (text: string) => {
+    if (!text.trim() || requestBusy) return;
+    void agent.send({ message: text });
   };
 
-  // Handle input change
-  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+  const handleSuggestion = (text: string) => {
+    sendText(text);
   };
 
-  // Handle suggestion click from empty state
-  const handleSuggestion = async (text: string) => {
-    if (requestBusy) return;
-    await cancelPendingClientTools(userMessageCancellation);
-    sendMessage({ text });
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
     if (!input.trim() || requestBusy) return;
-
-    const text = input;
+    const text = input.trim();
     setInput("");
-    await cancelPendingClientTools(userMessageCancellation);
-    sendMessage({ text });
+    sendText(text);
   };
 
-  // Handle keydown for textarea
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (input.trim() && !requestBusy) {
-        const text = input;
-        setInput("");
-        void cancelPendingClientTools(userMessageCancellation).then(() => sendMessage({ text }));
-      }
-    }
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    if (!input.trim() || requestBusy) return;
+    const text = input.trim();
+    setInput("");
+    sendText(text);
+  };
+
+  const handleDocuments = (documents: readonly UploadedDocument[]) => {
+    if (documents.length === 0 || requestBusy) return;
+    void agent.send({
+      message: documentsMessage(documents),
+      clientContext: {
+        uploadedDocuments: documents.map((document) => ({
+          type: document.type,
+          name: document.name,
+        })),
+      },
+    });
+  };
+
+  const handleInputResponse = (response: InputResponse) => {
+    if (requestBusy) return;
+    void agent.send({ inputResponses: [response] });
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* ===== Left sidebar : instrument panel ===== */}
+    <div className="flex h-dvh overflow-hidden">
       <aside className="hidden min-[900px]:flex w-[280px] shrink-0 flex-col overflow-y-auto border-r border-line bg-panel-dk">
-        {/* Brand */}
         <div className="border-b border-line px-4 pb-4 pt-5">
           <div className="flex items-center gap-3">
             <MonogramLogo size={30} title="Attaché" />
@@ -182,7 +172,6 @@ export default function GermainPage() {
           </div>
         </div>
 
-        {/* Console panels */}
         <div className="flex flex-1 flex-col gap-3 p-3">
           <CaseStrip caseState={caseState} />
           <ProgressRoute currentIndex={displayStepIndex} />
@@ -190,21 +179,14 @@ export default function GermainPage() {
           <CaseFacts caseState={caseState} />
         </div>
 
-        {/* New case */}
         <div className="border-t border-line p-3">
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="btn w-full"
-          >
+          <button type="button" onClick={agent.reset} className="btn w-full">
             ↻ NEW CASE
           </button>
         </div>
       </aside>
 
-      {/* ===== Main column ===== */}
       <main className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar */}
         <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
           <div>
             <SplitFlap status={caseState.status} />
@@ -221,77 +203,72 @@ export default function GermainPage() {
           ) : null}
         </header>
 
-        {/* Feed */}
+        <section className="border-b border-line bg-panel-dk px-4 py-3 min-[900px]:hidden" aria-label="Case summary">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-mono text-[8.5px] uppercase tracking-[0.22em] text-ink2">Case route</div>
+              <div className="mt-1 text-sm font-semibold text-ink">
+                {caseState.destinationCountry || "Destination pending"}
+              </div>
+            </div>
+            <div className="text-right font-mono text-[9px] uppercase tracking-[0.14em] text-ink2">
+              {caseState.documents.length} docs
+            </div>
+          </div>
+          <div className="mt-3">
+            <ProgressRoute currentIndex={displayStepIndex} />
+          </div>
+        </section>
+
         <div className="feed-wrap" style={{ background: "var(--bone)" }}>
           {!hasMessages ? (
             <EmptyState onSuggestion={handleSuggestion} />
           ) : (
             <ChatMessages
               messages={messages}
-              status={status}
-              onToolOutput={handleToolOutput}
+              status={agent.status}
+              onDocuments={handleDocuments}
+              onInputResponse={handleInputResponse}
             />
           )}
         </div>
 
-        {/* Transmission failure */}
-        {error ? (
+        {agent.error ? (
           <div style={{ background: "var(--bone)" }} className="px-5 pb-3">
             <div
+              role="alert"
               className="mx-auto flex max-w-[680px] items-center gap-3 px-3 py-2 font-mono text-[10.5px] tracking-[0.04em]"
               style={{
                 background: "var(--tint-problem)",
-                border: "1px solid var(--line)",
-                borderLeft: "4px solid var(--clay)",
+                border: "1px solid var(--clay)",
               }}
             >
-              <span style={{ color: "var(--clay)" }}>✕ Problem</span>
-              <span className="flex-1 text-ink2">
-                {awaitingToolAction
-                  ? "A tool action is waiting. Send a new message to cancel it, or use the tool controls."
-                  : "Transmission failed — the model request was refused (often a rate limit). Wait a moment, then retry."}
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!requestBusy && !awaitingToolAction) regenerate();
-                }}
-                disabled={requestBusy || awaitingToolAction}
-                className="btn shrink-0"
-                style={{ padding: "4px 10px" }}
-              >
-                ↻ RETRY
-              </button>
+              <span style={{ color: "var(--clay)" }}>X Problem</span>
+              <span className="flex-1 text-ink2">{agent.error.message}</span>
             </div>
           </div>
         ) : null}
 
-        {/* Input bar */}
         <form onSubmit={handleSubmit} className="inputbar">
           <div className="input-inner">
             <textarea
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={
-                requestBusy
-                  ? "Processing…"
-                  : awaitingToolAction
-                    ? "Send to cancel the pending tool…"
-                    : "Tell me about your trip…"
-              }
-              disabled={busy}
+              placeholder={requestBusy ? "Processing..." : pendingHumanInput ? "Approve or deny the pending action above..." : "Tell me about your trip..."}
+              aria-label="Message Attaché"
+              disabled={requestBusy || pendingHumanInput}
               rows={1}
               className="max-h-[200px] flex-1 resize-none border-none bg-transparent font-mono text-[11.5px] tracking-[0.06em] text-ink outline-none placeholder:text-ink2 placeholder:opacity-60 disabled:opacity-60"
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
+              onInput={(event) => {
+                const target = event.target as HTMLTextAreaElement;
                 target.style.height = "auto";
                 target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
               }}
             />
             <button
               type="submit"
-              disabled={!input.trim() || busy}
+              disabled={!input.trim() || requestBusy || pendingHumanInput}
               className="ptt disabled:pointer-events-none disabled:opacity-45"
             >
               ▸ SEND

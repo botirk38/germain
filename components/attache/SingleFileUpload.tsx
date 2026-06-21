@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Card, CardHead } from "@/components/attache/Card";
 import { StatusMark } from "@/components/attache/StatusMark";
 import { KeyButton } from "@/components/attache/KeyButton";
@@ -37,6 +37,12 @@ export function SingleFileUpload({
     setDragging(false);
     const f = e.dataTransfer.files?.[0];
     if (f) handleFile(f);
+  };
+
+  const onDropzoneKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    browseRef.current?.click();
   };
 
   const submit = () => {
@@ -103,11 +109,13 @@ export function SingleFileUpload({
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
             onClick={() => browseRef.current?.click()}
+            onKeyDown={onDropzoneKeyDown}
             role="button"
             tabIndex={0}
+            aria-label={`Attach ${TYPE_LABEL(documentType)} filename`}
           >
-            <div className="dz-title">{"\u25A4"} DROP FILE OR BROWSE</div>
-            <div className="dz-sub">PDF, image, or scan accepted</div>
+            <div className="dz-title">{"\u25A4"} MATCH FILE NAME</div>
+            <div className="dz-sub">Files stay local for now; Attaché records the filename.</div>
             <input
               ref={browseRef}
               type="file"
@@ -132,7 +140,7 @@ export function SingleFileUpload({
                 <button
                   type="button"
                   className="upl-x"
-                  aria-label="Remove"
+                  aria-label={`Remove ${TYPE_LABEL(documentType)} file ${file}`}
                   onClick={() => setFile(null)}
                 >
                   {"\u2715"}
@@ -147,9 +155,9 @@ export function SingleFileUpload({
           <KeyButton
             onClick={submit}
             disabled={!file || isSubmitting}
-            submittingLabel={isSubmitting ? "UPLOADING\u2026" : undefined}
+            submittingLabel={isSubmitting ? "RECORDING\u2026" : undefined}
           >
-            UPLOAD DOCUMENT
+            RECORD DOCUMENT
           </KeyButton>
         </div>
       </div>

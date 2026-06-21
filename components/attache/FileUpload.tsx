@@ -1,14 +1,12 @@
 "use client";
 
-import { useRef, useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Card, CardHead } from "@/components/attache/Card";
 import { StatusMark } from "@/components/attache/StatusMark";
 import { KeyButton } from "@/components/attache/KeyButton";
 
-// Real document uploader for the uploadDocuments client tool. The user attaches
-// actual files (passport.png, bank.pdf, …); we match each by filename to a
-// required document type, or they attach per-slot. No bytes leave the browser —
-// the mock backend only needs the filename + type to advance the case.
+// Metadata-only document intake. Files stay in the browser; only names/types are
+// sent to the agent until a real storage-backed upload route exists.
 
 const TYPE_LABEL = (t: string) => t.replace(/_/g, " ").toUpperCase();
 
@@ -120,6 +118,12 @@ export function FileUpload({
     if (e.dataTransfer.files?.length) assignByName(e.dataTransfer.files);
   };
 
+  const onDropzoneKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    browseRef.current?.click();
+  };
+
   const attachedCount = Object.keys(attached).length;
   const missingCritical = criticalDocuments.filter((t) => !attached[t]);
   const canSubmit = attachedCount > 0 && !isSubmitting;
@@ -138,7 +142,7 @@ export function FileUpload({
 
   return (
     <Card className="notam">
-      <CardHead right={`${attachedCount}/${requiredTypes.length}`}>UPLOAD DOCUMENTS</CardHead>
+      <CardHead right={`${attachedCount}/${requiredTypes.length}`}>DOCUMENT METADATA</CardHead>
 
       {/* Drop zone */}
       <div
@@ -150,12 +154,14 @@ export function FileUpload({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         onClick={() => browseRef.current?.click()}
+        onKeyDown={onDropzoneKeyDown}
         role="button"
         tabIndex={0}
+        aria-label="Attach document filenames"
       >
-        <div className="dz-title">▤ DRAG FILES HERE</div>
+        <div className="dz-title">▤ MATCH FILE NAMES</div>
         <div className="dz-sub">
-          We match <code>passport.png</code>, <code>bank.pdf</code>, … by name — or browse
+          Files stay local for now. We send document names to Attaché for planning.
         </div>
         <input
           ref={browseRef}
@@ -192,7 +198,7 @@ export function FileUpload({
                     <button
                       type="button"
                       className="upl-x"
-                      aria-label="Remove"
+                      aria-label={`Remove ${TYPE_LABEL(type)} file ${file}`}
                       onClick={() =>
                         setAttached((a) => {
                           const n = { ...a };
@@ -232,7 +238,7 @@ export function FileUpload({
 
       <div style={{ paddingTop: 12 }}>
         <KeyButton onClick={submit} disabled={!canSubmit} submittingLabel="TRANSMITTING…">
-          {attachedCount === requiredTypes.length ? "SUBMIT ALL DOCUMENTS" : "SUBMIT DOCUMENTS"}
+          {attachedCount === requiredTypes.length ? "RECORD ALL DOCUMENTS" : "RECORD DOCUMENTS"}
         </KeyButton>
         {missingCritical.length > 0 ? (
           <span className="dz-hint">

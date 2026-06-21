@@ -1,189 +1,292 @@
 "use client";
 
-import { useChat, Chat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import type { OnboardingUIMessage } from "@/lib/agents/onboarding";
-import type { RequestDocumentOutput } from "@/lib/tools/onboarding-tools";
-import { MonogramLogo } from "@/components/attache/MonogramLogo";
-import { SplitFlap } from "@/components/console/SplitFlap";
-import { OnboardingMessages } from "@/components/OnboardingMessages";
-import { useState, useEffect, useRef, type FormEvent, type ChangeEvent, type KeyboardEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { MonogramLogo } from "@/components/attache/MonogramLogo";
 
-const chatTransport = new DefaultChatTransport<OnboardingUIMessage>({
-  api: "/api/onboarding",
-});
+const PROFILE_STORAGE_KEY = "attache:onboarding-profile";
+const EVE_SESSION_STORAGE_KEY = "attache:eve-session";
+const PROFILE_STORAGE_VERSION = 1;
 
-const onboardingChat = new Chat<OnboardingUIMessage>({
-  transport: chatTransport,
-});
+const purposeOptions = [
+  { label: "Tourism", value: "tourism" },
+  { label: "Business", value: "business" },
+  { label: "Study", value: "study" },
+  { label: "Work", value: "work" },
+  { label: "Family visit", value: "family_visit" },
+  { label: "Transit", value: "transit" },
+] as const;
+
+const employmentOptions = [
+  { label: "Employed", value: "employed" },
+  { label: "Self-employed", value: "self_employed" },
+  { label: "Student", value: "student" },
+  { label: "Unemployed", value: "unemployed" },
+  { label: "Retired", value: "retired" },
+] as const;
+
+type FormState = {
+  readonly fullName: string;
+  readonly nationality: string;
+  readonly residenceCountry: string;
+  readonly residenceCity: string;
+  readonly employmentStatus: string;
+  readonly employer: string;
+  readonly jobTitle: string;
+  readonly monthlyIncome: string;
+  readonly destinationCountry: string;
+  readonly destinationCity: string;
+  readonly purpose: string;
+  readonly arrivalDate: string;
+  readonly departureDate: string;
+  readonly familyInHomeCountry: boolean;
+  readonly propertyOwned: boolean;
+  readonly previousRefusals: boolean;
+};
+
+const initialForm: FormState = {
+  fullName: "",
+  nationality: "",
+  residenceCountry: "",
+  residenceCity: "",
+  employmentStatus: "",
+  employer: "",
+  jobTitle: "",
+  monthlyIncome: "",
+  destinationCountry: "",
+  destinationCity: "",
+  purpose: "",
+  arrivalDate: "",
+  departureDate: "",
+  familyInHomeCountry: false,
+  propertyOwned: false,
+  previousRefusals: false,
+};
+
+function toProfile(form: FormState): Record<string, string | number | boolean> {
+  const monthlyIncome = Number(form.monthlyIncome);
+  return {
+    fullName: form.fullName.trim(),
+    nationality: form.nationality.trim(),
+    residenceCountry: form.residenceCountry.trim(),
+    residenceCity: form.residenceCity.trim(),
+    employmentStatus: form.employmentStatus,
+    ...(form.employer.trim() ? { employer: form.employer.trim() } : {}),
+    ...(form.jobTitle.trim() ? { jobTitle: form.jobTitle.trim() } : {}),
+    ...(Number.isFinite(monthlyIncome) && monthlyIncome > 0 ? { monthlyIncome } : {}),
+    destinationCountry: form.destinationCountry.trim(),
+    ...(form.destinationCity.trim() ? { destinationCity: form.destinationCity.trim() } : {}),
+    purpose: form.purpose,
+    arrivalDate: form.arrivalDate,
+    departureDate: form.departureDate,
+    familyInHomeCountry: form.familyInHomeCountry,
+    propertyOwned: form.propertyOwned,
+    previousRefusals: form.previousRefusals,
+  };
+}
+
+function requiredComplete(form: FormState): boolean {
+  const hasRequiredFields = [
+    form.fullName,
+    form.nationality,
+    form.residenceCountry,
+    form.residenceCity,
+    form.employmentStatus,
+    form.destinationCountry,
+    form.purpose,
+    form.arrivalDate,
+    form.departureDate,
+  ].every((value) => value.trim().length > 0);
+
+  return hasRequiredFields && form.departureDate > form.arrivalDate;
+}
+
+function Field({ id, label, children }: { readonly id: string; readonly label: string; readonly children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id} className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink2">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function MiniCard({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="border border-line bg-panel px-3 py-3 shadow-sm">
+      <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-ink2">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-ink">{value}</div>
+    </div>
+  );
+}
 
 export default function OnboardingPage() {
-  const [input, setInput] = useState("");
   const router = useRouter();
+  const [form, setForm] = useState<FormState>(initialForm);
+  const canSubmit = requiredComplete(form);
 
-  const {
-    messages,
-    status,
-    error,
-    sendMessage,
-    regenerate,
-    addToolOutput,
-  } = useChat<OnboardingUIMessage>({
-    chat: onboardingChat,
-  });
-
-  const busy = status === "submitted" || status === "streaming";
-
-  const handleToolOutput = (toolCallId: string, _toolName: string, output: RequestDocumentOutput) => {
-    addToolOutput({
-      toolCallId,
-      tool: "requestDocument",
-      state: "output-available",
-      output,
-    });
+  const updateText = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setForm((current) => ({ ...current, [field]: event.target.value }));
   };
 
-  // Check if onboarding is complete (completeOnboarding tool was called)
-  const isComplete = messages.some((m) =>
-    m.role === "assistant" &&
-    m.parts?.some((p) =>
-      "type" in p && p.type === "tool-completeOnboarding" &&
-      "state" in p && p.state === "output-available"
-    )
-  );
-
-  const redirected = useRef(false);
-  useEffect(() => {
-    if (!isComplete || redirected.current) return;
-    redirected.current = true;
-    const id = setTimeout(() => router.push("/chat"), 1500);
-    return () => clearTimeout(id);
-  }, [isComplete, router]);
-
-  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+  const updateBoolean = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
+    setForm((current) => ({ ...current, [field]: event.target.checked }));
   };
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || busy) return;
-    sendMessage({ text: input });
-    setInput("");
-  };
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit) return;
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (input.trim() && !busy) {
-        sendMessage({ text: input });
-        setInput("");
-      }
-    }
+    window.localStorage.removeItem(EVE_SESSION_STORAGE_KEY);
+    window.sessionStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify({ version: PROFILE_STORAGE_VERSION, createdAt: Date.now(), profile: toProfile(form) }),
+    );
+    router.push("/chat");
   };
 
   return (
-    <div className="flex h-screen flex-col">
-      {/* Topbar */}
-      <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
-        <MonogramLogo size={28} title="Attache" />
-        <span className="wordmark">
-          <span className="rim" />
-          ATTACHE
-        </span>
-        <div className="flex-1" />
-        <SplitFlap status="intake" />
-        <div className="font-mono text-[8.5px] tracking-[0.22em] text-ink2">
-          BOARDING
-        </div>
-      </header>
-
-      {/* Feed */}
-      <div className="feed-wrap" style={{ background: "var(--bone)" }}>
-        {messages.length === 0 ? (
-          <div className="mx-auto flex max-w-[680px] flex-col items-center gap-6 px-5 py-16 text-center">
-            <MonogramLogo size={48} />
-            <h2 className="text-[22px] font-bold text-ink">Let&apos;s get you on your way.</h2>
-            <p className="max-w-[460px] text-[13px] leading-relaxed text-ink2">
-              Two minutes of details now saves weeks of back-and-forth later.
-              I&apos;ll ask about your trip, then prepare everything you need
-              for the consulate.
-            </p>
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => sendMessage({ text: "Hello, I'd like to start my visa application." })}
-              >
-                Let&apos;s go
-              </button>
-              <span className="font-mono text-[9px] tracking-[0.14em] text-ink2">
-                ~ 2 MIN
-              </span>
+    <main className="min-h-screen bg-paper px-4 py-5 text-ink sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 lg:grid lg:grid-cols-[0.8fr_1.2fr]">
+        <section className="border border-line bg-panel-dk p-5 shadow-sm lg:sticky lg:top-5 lg:h-fit">
+          <div className="flex items-center gap-3">
+            <MonogramLogo size={34} title="Attaché" />
+            <div>
+              <div className="wordmark">
+                <span className="rim" />
+                ATTACHÉ
+              </div>
+              <div className="mt-2 font-mono text-[9px] uppercase tracking-[0.22em] text-ink2">
+                visa intake
+              </div>
             </div>
           </div>
-        ) : (
-          <OnboardingMessages
-            messages={messages}
-            status={status}
-            onToolOutput={handleToolOutput}
-          />
-        )}
-      </div>
 
-      {/* Transmission failure */}
-      {error ? (
-        <div style={{ background: "var(--bone)" }} className="px-5 pb-3">
-          <div
-            className="mx-auto flex max-w-[680px] items-center gap-3 px-3 py-2 font-mono text-[10.5px] tracking-[0.04em]"
-            style={{
-              background: "var(--tint-problem)",
-              border: "1px solid var(--line)",
-              borderLeft: "4px solid var(--clay)",
-            }}
-          >
-            <span style={{ color: "var(--clay)" }}>✕ Problem</span>
-            <span className="flex-1 text-ink2">
-              Transmission failed — the model request was refused (often a rate limit). Wait a moment, then retry.
-            </span>
-            <button
-              type="button"
-              onClick={() => regenerate()}
-              className="btn shrink-0"
-              style={{ padding: "4px 10px" }}
-            >
-              ↻ RETRY
-            </button>
+          <div className="mt-8 space-y-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">Takes about 90 seconds</p>
+            <h1 className="max-w-sm text-3xl font-semibold leading-tight tracking-[-0.04em] text-ink">
+              Start with only the details Attaché needs.
+            </h1>
+            <p className="max-w-sm text-sm leading-6 text-ink2">
+              A short intake is faster than a chat interview. You can add documents and edge cases after the visa plan starts.
+            </p>
           </div>
-        </div>
-      ) : null}
 
-      {/* Input bar */}
-      <form onSubmit={handleSubmit} className="inputbar">
-        <div className="input-inner">
-          <textarea
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder={busy ? "Processing..." : "Reply to Attache..."}
-            disabled={busy || isComplete}
-            rows={1}
-            className="max-h-[200px] flex-1 resize-none border-none bg-transparent font-mono text-[11.5px] tracking-[0.06em] text-ink outline-none placeholder:text-ink2 placeholder:opacity-60 disabled:opacity-60"
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = "auto";
-              target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
-            }}
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || busy || isComplete}
-            className="ptt disabled:pointer-events-none disabled:opacity-45"
-          >
-            &#x25b8; SEND
-          </button>
-        </div>
-      </form>
-    </div>
+          <div className="mt-7 grid grid-cols-3 gap-2">
+            <MiniCard label="Step 1" value="Profile" />
+            <MiniCard label="Step 2" value="Trip" />
+            <MiniCard label="Step 3" value="Risk" />
+          </div>
+        </section>
+
+        <form onSubmit={handleSubmit} className="border border-line bg-panel p-4 shadow-sm sm:p-6">
+          <div className="mb-5 flex items-center justify-between gap-4 border-b border-line pb-4">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink2">Quick onboarding</div>
+              <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">Tell us the basics</h2>
+            </div>
+            <div className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-sage sm:block">
+              no account setup detour
+            </div>
+          </div>
+
+          <div className="space-y-7">
+            <section className="space-y-4">
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">1. You</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field id="fullName" label="Full legal name">
+                  <Input id="fullName" value={form.fullName} onChange={updateText("fullName")} placeholder="As shown on passport" required />
+                </Field>
+                <Field id="nationality" label="Passport country">
+                  <Input id="nationality" value={form.nationality} onChange={updateText("nationality")} placeholder="Uzbekistan" required />
+                </Field>
+                <Field id="residenceCountry" label="Country of residence">
+                  <Input id="residenceCountry" value={form.residenceCountry} onChange={updateText("residenceCountry")} placeholder="United States" required />
+                </Field>
+                <Field id="residenceCity" label="Residence city">
+                  <Input id="residenceCity" value={form.residenceCity} onChange={updateText("residenceCity")} placeholder="New York" required />
+                </Field>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">2. Trip</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field id="destinationCountry" label="Destination country">
+                  <Input id="destinationCountry" value={form.destinationCountry} onChange={updateText("destinationCountry")} placeholder="France" required />
+                </Field>
+                <Field id="destinationCity" label="Destination city optional">
+                  <Input id="destinationCity" value={form.destinationCity} onChange={updateText("destinationCity")} placeholder="Paris" />
+                </Field>
+                <Field id="purpose" label="Purpose">
+                  <Select id="purpose" value={form.purpose} onChange={updateText("purpose")} required>
+                    <option value="">Choose purpose</option>
+                    {purposeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field id="employmentStatus" label="Employment">
+                  <Select id="employmentStatus" value={form.employmentStatus} onChange={updateText("employmentStatus")} required>
+                    <option value="">Choose status</option>
+                    {employmentOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field id="arrivalDate" label="Arrival date">
+                  <Input id="arrivalDate" type="date" value={form.arrivalDate} onChange={updateText("arrivalDate")} required />
+                </Field>
+                <Field id="departureDate" label="Departure date">
+                  <Input id="departureDate" type="date" value={form.departureDate} onChange={updateText("departureDate")} required />
+                </Field>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">3. Approval signals</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field id="employer" label="Employer optional">
+                  <Input id="employer" value={form.employer} onChange={updateText("employer")} placeholder="Company name" />
+                </Field>
+                <Field id="jobTitle" label="Job title optional">
+                  <Input id="jobTitle" value={form.jobTitle} onChange={updateText("jobTitle")} placeholder="Product manager" />
+                </Field>
+                <Field id="monthlyIncome" label="Monthly income optional">
+                  <Input id="monthlyIncome" type="number" min="0" inputMode="decimal" value={form.monthlyIncome} onChange={updateText("monthlyIncome")} placeholder="Approximate" />
+                </Field>
+                <div className="grid gap-3 border border-line bg-paper/60 p-3">
+                  <label htmlFor="familyInHomeCountry" className="flex items-center gap-3 text-sm text-ink">
+                    <Checkbox id="familyInHomeCountry" checked={form.familyInHomeCountry} onChange={updateBoolean("familyInHomeCountry")} />
+                    Family ties in home country
+                  </label>
+                  <label htmlFor="propertyOwned" className="flex items-center gap-3 text-sm text-ink">
+                    <Checkbox id="propertyOwned" checked={form.propertyOwned} onChange={updateBoolean("propertyOwned")} />
+                    Property or major assets at home
+                  </label>
+                  <label htmlFor="previousRefusals" className="flex items-center gap-3 text-sm text-ink">
+                    <Checkbox id="previousRefusals" checked={form.previousRefusals} onChange={updateBoolean("previousRefusals")} />
+                    Previous visa refusal
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="mt-7 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-ink2">
+              You can edit details with Attaché later. Departure must be after arrival.
+            </p>
+            <Button type="submit" disabled={!canSubmit} size="lg" className="bg-brass text-white hover:bg-brass/90">
+              Start my visa plan
+            </Button>
+          </div>
+        </form>
+      </div>
+    </main>
   );
 }
