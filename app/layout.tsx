@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
-import { B612, B612_Mono } from "next/font/google";
+import { B612, B612_Mono, Geist } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const b612 = B612({
   weight: ["400", "700"],
@@ -40,10 +44,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${b612.variable} ${b612Mono.variable}`}>
+    <html lang="en" className={cn(b612.variable, b612Mono.variable, "font-sans", geist.variable)}>
       <body className="font-sans text-ink">
         <ClerkProvider appearance={clerkAppearance}>
-          {children}
+          <TooltipProvider>{children}</TooltipProvider>
         </ClerkProvider>
       </body>
     </html>
