@@ -516,18 +516,21 @@ function ServerToolOutput({
       );
 
     case "askQuestion": {
-      const answers = (output.answers as Array<{ questionId: string; selectedOption: string; freeText?: string }>) ?? [];
+      const answers = Array.isArray(output.answers)
+        ? (output.answers as ReadonlyArray<{ questionId: string; selectedOption?: string; freeText?: string; skipped?: boolean }>)
+        : [];
       return (
         <Card>
           <CardHead>ANSWERS RECEIVED</CardHead>
           <div className="cl">
-            {answers.map((a) => (
-              <ClRow
-                key={a.questionId}
-                label={a.questionId}
-                state={a.freeText ? `${a.selectedOption} (${a.freeText})` : a.selectedOption}
-              />
-            ))}
+            {answers.map((a) => {
+              const display = a.skipped
+                ? "SKIPPED"
+                : a.freeText && a.selectedOption
+                  ? `${a.selectedOption} (${a.freeText})`
+                  : a.freeText ?? a.selectedOption ?? "—";
+              return <ClRow key={a.questionId} label={a.questionId} state={display} />;
+            })}
           </div>
         </Card>
       );
@@ -547,7 +550,34 @@ function ServerToolOutput({
 
 // ==================== ASK QUESTION CARD ====================
 
-type QuestionAnswer = { questionId: string; selectedOption: string; freeText?: string };
+interface QuestionAnswer {
+  questionId: string;
+  selectedOption?: string;
+  freeText?: string;
+  skipped?: boolean;
+}
+
+interface ParsedQuestion {
+  id: string;
+  question: string;
+  options: readonly string[];
+  allowFreeText: boolean;
+}
+
+function parseQuestions(input: unknown): { context?: string; questions: ParsedQuestion[] } {
+  const parsed = isRecord(input) ? input : {};
+  const context = typeof parsed.context === "string" ? parsed.context : undefined;
+  const raw = Array.isArray(parsed.questions) ? parsed.questions : [];
+  const questions: ParsedQuestion[] = raw
+    .filter(isRecord)
+    .map((q) => ({
+      id: String(q.id ?? ""),
+      question: String(q.question ?? ""),
+      options: Array.isArray(q.options) ? q.options.filter((o): o is string => typeof o === "string") : [],
+      allowFreeText: Boolean(q.allowFreeText),
+    }));
+  return { context, questions };
+}
 
 function AskQuestionCard({
   input,
@@ -558,28 +588,38 @@ function AskQuestionCard({
   isSubmitting: boolean;
   onSubmit: (answers: QuestionAnswer[]) => void;
 }) {
-  const parsed = isRecord(input) ? input : {};
-  const contextText = typeof parsed.context === "string" ? parsed.context : undefined;
-  const questions = Array.isArray(parsed.questions)
-    ? (parsed.questions as Array<Record<string, unknown>>)
-    : [];
-
+  const { context, questions } = parseQuestions(input);
   const [selections, setSelections] = useState<Record<string, string>>({});
+  const [skipped, setSkipped] = useState<Record<string, boolean>>({});
   const [freeTexts, setFreeTexts] = useState<Record<string, string>>({});
 
-  const allAnswered = questions.every((q) => {
-    const id = q.id as string;
-    return Boolean(selections[id]);
-  });
+  const handleSelect = (id: string, option: string) => {
+    setSelections((prev) => ({ ...prev, [id]: option }));
+    setSkipped((prev) => ({ ...prev, [id]: false }));
+  };
+
+  const handleSkip = (id: string) => {
+    setSkipped((prev) => ({ ...prev, [id]: true }));
+    setSelections((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setFreeTexts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
 
   const handleSubmit = () => {
     const answers: QuestionAnswer[] = questions.map((q) => {
-      const id = q.id as string;
-      const answer: QuestionAnswer = {
-        questionId: id,
-        selectedOption: selections[id] ?? "",
-      };
-      if (freeTexts[id]) answer.freeText = freeTexts[id];
+      if (skipped[q.id]) return { questionId: q.id, skipped: true };
+      const answer: QuestionAnswer = { questionId: q.id };
+      const selected = selections[q.id];
+      if (selected) answer.selectedOption = selected;
+      const text = freeTexts[q.id];
+      if (text) answer.freeText = text;
       return answer;
     });
     onSubmit(answers);
@@ -587,71 +627,88 @@ function AskQuestionCard({
 
   return (
     <Card>
-      {contextText ? <CardHead>{contextText.toUpperCase()}</CardHead> : <CardHead>QUESTION</CardHead>}
+      <CardHead>{context ? context.toUpperCase() : "QUESTION"}</CardHead>
       <div className="cl" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {questions.map((q) => {
-          const id = q.id as string;
-          const questionText = q.question as string;
-          const options = Array.isArray(q.options) ? (q.options as string[]) : [];
-          const allowFreeText = Boolean(q.allowFreeText);
-          const selected = selections[id];
+          const isSkipped = Boolean(skipped[q.id]);
+          const selected = selections[q.id];
 
           return (
-            <div key={id}>
+            <div key={q.id} style={{ opacity: isSkipped ? 0.45 : 1 }}>
               <div
                 style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--ink)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
                   marginBottom: 6,
-                  lineHeight: 1.4,
                 }}
               >
-                {questionText}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {options.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    className="btn"
-                    disabled={isSubmitting}
-                    style={{
-                      padding: "5px 12px",
-                      fontSize: 10.5,
-                      background: selected === opt ? "var(--ink)" : "transparent",
-                      color: selected === opt ? "var(--bone)" : "var(--ink)",
-                      border: `1px solid ${selected === opt ? "var(--ink)" : "var(--line)"}`,
-                    }}
-                    onClick={() =>
-                      setSelections((prev) => ({ ...prev, [id]: opt }))
-                    }
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-              {allowFreeText && (
-                <input
-                  type="text"
-                  placeholder="Or type your answer..."
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", lineHeight: 1.4 }}>
+                  {q.question}
+                </div>
+                <button
+                  type="button"
+                  className="btn"
                   disabled={isSubmitting}
-                  value={freeTexts[id] ?? ""}
-                  onChange={(e) =>
-                    setFreeTexts((prev) => ({ ...prev, [id]: e.target.value }))
-                  }
+                  onClick={() => isSkipped ? handleSelect(q.id, "") : handleSkip(q.id)}
                   style={{
-                    marginTop: 6,
-                    width: "100%",
-                    padding: "5px 8px",
-                    fontSize: 11,
-                    fontFamily: "var(--mono)",
-                    border: "1px solid var(--line)",
+                    padding: "2px 8px",
+                    fontSize: 9.5,
+                    color: isSkipped ? "var(--sage)" : "var(--ink2)",
                     background: "transparent",
-                    color: "var(--ink)",
-                    outline: "none",
+                    border: "none",
+                    textDecoration: isSkipped ? "none" : "underline",
+                    flexShrink: 0,
                   }}
-                />
+                >
+                  {isSkipped ? "UNDO" : "SKIP"}
+                </button>
+              </div>
+              {!isSkipped && (
+                <>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {q.options.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        className="btn"
+                        disabled={isSubmitting}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: 10.5,
+                          background: selected === opt ? "var(--ink)" : "transparent",
+                          color: selected === opt ? "var(--bone)" : "var(--ink)",
+                          border: `1px solid ${selected === opt ? "var(--ink)" : "var(--line)"}`,
+                        }}
+                        onClick={() => handleSelect(q.id, opt)}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  {q.allowFreeText && (
+                    <input
+                      type="text"
+                      placeholder="Or type your answer..."
+                      disabled={isSubmitting}
+                      value={freeTexts[q.id] ?? ""}
+                      onChange={(e) =>
+                        setFreeTexts((prev) => ({ ...prev, [q.id]: e.target.value }))
+                      }
+                      style={{
+                        marginTop: 6,
+                        width: "100%",
+                        padding: "5px 8px",
+                        fontSize: 11,
+                        fontFamily: "var(--mono)",
+                        border: "1px solid var(--line)",
+                        background: "transparent",
+                        color: "var(--ink)",
+                        outline: "none",
+                      }}
+                    />
+                  )}
+                </>
               )}
             </div>
           );
@@ -659,7 +716,7 @@ function AskQuestionCard({
         <div style={{ paddingTop: 4 }}>
           <KeyButton
             onClick={handleSubmit}
-            disabled={isSubmitting || !allAnswered}
+            disabled={isSubmitting}
             submittingLabel="SUBMITTING..."
           >
             SUBMIT ANSWERS
@@ -738,9 +795,6 @@ function ClientToolPart<T extends GermainClientToolName>({
           tool: "submitApplication", toolCallId: part.toolCallId,
           output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
         });
-        break;
-      case "askQuestion":
-        // fallback — individual option clicks handle submission
         break;
       case "approveSubmission":
         onOutput({
