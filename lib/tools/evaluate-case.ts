@@ -109,7 +109,7 @@ const PURPOSE_TO_CATEGORY: Record<string, string> = {
 };
 
 export const evaluateCaseTool = tool({
-  description: "Evaluate visa eligibility, select the correct visa route, and generate a tailored document checklist. This is the first tool to call for any new visa case. Replaces assessEligibility + recommendVisaRoute + buildChecklist.",
+  description: "Evaluate visa eligibility, select the correct visa route, and generate a tailored document checklist. This is the first tool to call for any new visa case.",
   inputSchema: z.object({
     nationality: z.string().describe("Applicant nationality / passport country"),
     residenceCountry: z.string().describe("Current country of residence"),

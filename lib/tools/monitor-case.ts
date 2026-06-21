@@ -44,7 +44,7 @@ function buildResult(
 }
 
 export const monitorCaseTool = tool({
-  description: "Monitor the submitted visa case for updates by checking the user's Gmail for embassy/VAC emails. Searches for emails matching the reference number or embassy-related subjects. Returns structured status with any RFEs, appointment changes, or decisions found. Replaces trackEmbassyUpdates + trackDecision + provideMissingInsurance.",
+  description: "Monitor the submitted visa case for updates by checking the user's Gmail for embassy/VAC emails. Searches for emails matching the reference number or embassy-related subjects. Returns structured status with any RFEs, appointment changes, or decisions found.",
   inputSchema: z.object({
     referenceNumber: z.string().describe("Visa application reference number"),
     applicantEmail: z.string().describe("User's email address to search"),

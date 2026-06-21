@@ -80,7 +80,6 @@ function deriveNextStatus(
   toolOutput: Record<string, unknown>
 ): CaseStatus {
   const statusFlow: Record<string, CaseStatus> = {
-    // Consolidated tools
     evaluateCase: "checklist_ready",
     uploadDocuments: "documents_reviewed",
     reviewAndPrepare: "pack_ready",
@@ -92,19 +91,6 @@ function deriveNextStatus(
       : toolOutput.status === "decision_made"
         ? "decision_ready"
         : "processing",
-    // Legacy tool names (for backward compatibility with existing messages)
-    assessEligibility: "route_selected",
-    recommendVisaRoute: "checklist_ready",
-    buildChecklist: "checklist_ready",
-    reviewDocuments: "documents_reviewed",
-    generateApplication: "form_ready",
-    prepareSupportingPack: "pack_ready",
-    bookAppointment: "appointment_set",
-    payFees: "fees_paid",
-    submitFiling: "submitted",
-    trackEmbassyUpdates: toolOutput.status === "rfe_issued" ? "awaiting_biometrics" : "processing",
-    trackDecision: "decision_ready",
-    provideMissingInsurance: "processing",
   };
 
   return statusFlow[toolName] || current;
@@ -119,8 +105,6 @@ function applyToolOutput(
   const updates: Partial<GermainCase> = {};
 
   switch (toolName) {
-    // ===== Consolidated tools =====
-
     case "evaluateCase": {
       updates.visaType = output.visaType as string;
       updates.destinationCountry = (output.fees as Record<string, unknown>)
@@ -332,161 +316,7 @@ function applyToolOutput(
       break;
     }
 
-    // ===== Legacy tool names (backward compatibility) =====
 
-    case "assessEligibility": {
-      if (output.eligible) {
-        updates.visaType = output.visaType as string;
-        updates.destinationCountry = output.destinationCountry as string;
-        updates.approvalLikelihood = output.baseLikelihood as number;
-      }
-      break;
-    }
-
-    case "recommendVisaRoute": {
-      updates.fees = {
-        ...state.fees,
-        visaFee: output.visaFee as number,
-        total: output.visaFee as number,
-      };
-      break;
-    }
-
-    case "buildChecklist": {
-      const required = (output.requiredDocuments as Array<{ type: string; description: string; critical: boolean }>) || [];
-      updates.documents = required.map((doc, i) => ({
-        id: `doc-${i}`,
-        name: doc.description,
-        type: doc.type as GermainDocument["type"],
-        status: "missing" as const,
-      }));
-      break;
-    }
-
-    case "reviewDocuments": {
-      const docId = output.documentId as string;
-      const recommendations = (output.recommendations as Recommendation[]) || [];
-      updates.documents = state.documents.map((d) =>
-        d.id === docId
-          ? {
-              ...d,
-              status: output.verificationStatus as GermainDocument["status"],
-              extractedData: output.extractedFields as Record<string, string>,
-              riskFlags: (output.issues as Array<{ message: string }>)?.map((i) => i.message) || [],
-            }
-          : d
-      );
-      const existingIds = new Set(state.recommendations.map((r) => r.id));
-      const newRecs = recommendations.filter((r) => !existingIds.has(r.id));
-      updates.recommendations = [...state.recommendations, ...newRecs];
-      if (output.extractedFields && (output.extractedFields as Record<string, string>).balance) {
-        const balance = parseFloat((output.extractedFields as Record<string, string>).balance);
-        updates.financials = {
-          ...state.financials,
-          bankBalance: balance,
-          coverageRatio: state.financials.tripBudget ? balance / state.financials.tripBudget : undefined,
-        };
-      }
-      break;
-    }
-
-    case "generateApplication": {
-      const formData = output.formData as Record<string, string>;
-      updates.applicant = {
-        ...state.applicant,
-        fullName: formData.fullName,
-        nationality: formData.nationality,
-        passportNumber: formData.passportNumber,
-      };
-      updates.travel = {
-        ...state.travel,
-        purpose: formData.purposeOfTravel as GermainCase["travel"]["purpose"],
-        arrivalDate: formData.arrivalDate,
-        departureDate: formData.departureDate,
-      };
-      updates.formCompletion = 100;
-      break;
-    }
-
-    case "prepareSupportingPack":
-      break;
-
-    case "bookAppointment": {
-      updates.appointments = [
-        ...(state.appointments || []),
-        {
-          type: output.appointmentType as "biometrics" | "interview",
-          date: output.date as string,
-          time: output.time as string,
-          location: output.location as string,
-          confirmed: true,
-        },
-      ];
-      break;
-    }
-
-    case "payFees": {
-      updates.fees = { ...state.fees, paid: true };
-      break;
-    }
-
-    case "submitFiling": {
-      updates.referenceNumber = `GER-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-      updates.timeline = [
-        ...(state.timeline || []),
-        {
-          title: "Application Submitted",
-          description: `Reference: ${updates.referenceNumber}`,
-          time: new Date().toISOString(),
-          status: "complete",
-        },
-      ];
-      break;
-    }
-
-    case "trackEmbassyUpdates": {
-      if (output.status === "rfe_issued") {
-        updates.embassyFollowUps = [
-          ...(state.embassyFollowUps || []),
-          {
-            type: "rfe",
-            description: (output.rfeDetails as { explanation: string })?.explanation || "Additional documents required",
-            deadline: output.deadline as string,
-            responded: false,
-          },
-        ];
-      } else if (output.status === "awaiting_biometrics") {
-        updates.embassyFollowUps = [
-          ...(state.embassyFollowUps || []),
-          {
-            type: "biometrics_scheduled",
-            description: output.message as string,
-            responded: true,
-          },
-        ];
-      }
-      break;
-    }
-
-    case "provideMissingInsurance": {
-      updates.embassyFollowUps = state.embassyFollowUps.map((f) =>
-        f.type === "rfe" ? { ...f, responded: true } : f
-      );
-      break;
-    }
-
-    case "trackDecision": {
-      updates.timeline = [
-        ...(state.timeline || []),
-        {
-          title: output.decision === "approved" ? "Visa Approved" : "Decision Received",
-          description: output.nextSteps as string,
-          time: new Date().toISOString(),
-          status: output.decision === "approved" ? "complete" : "alert",
-        } as GermainTimelineEvent,
-      ];
-      break;
-    }
   }
 
   return updates;
