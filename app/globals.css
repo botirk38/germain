@@ -970,24 +970,7 @@ body {
   padding: 0 14px 13px;
 }
 
-.chip {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  padding: 6px 12px;
-  border: 1px solid var(--ink2);
-  border-radius: 999px;
-  color: var(--ink);
-  cursor: pointer;
-  transition: all 0.25s;
-  background: transparent;
-}
-
-.chip:hover {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
-}
+/* .chip styles moved to AI Elements overrides section below */
 
 .chip.picked {
   background: var(--ink);
@@ -1168,6 +1151,119 @@ body {
 .ptt:hover {
   background: var(--brass);
   color: var(--paper);
+}
+
+/* ---------- AI Elements overrides ---------- */
+
+/* Conversation scroll-to-bottom button */
+.scroll-btn {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink2) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+.scroll-btn:hover {
+  background: var(--panel-dk) !important;
+  color: var(--ink) !important;
+}
+
+/* PromptInput — adapt InputGroup to Attache .input-inner */
+.inputbar [data-slot="input-group"] {
+  max-width: 680px;
+  margin: 0 auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 9px 12px;
+  height: auto;
+}
+.inputbar [data-slot="input-group"]:focus-within {
+  border-color: var(--ink2);
+}
+
+/* PromptInput textarea */
+.prompt-textarea {
+  font-family: var(--font-mono) !important;
+  font-size: 11.5px !important;
+  letter-spacing: 0.06em !important;
+  color: var(--ink) !important;
+  min-height: 24px !important;
+  max-height: 200px !important;
+  padding: 0 !important;
+}
+.prompt-textarea::placeholder {
+  color: var(--ink2) !important;
+  opacity: 0.6;
+}
+
+/* Prompt hint below input bar */
+.prompt-hint {
+  background: var(--panel);
+  padding: 0 22px 9px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  color: var(--ink2);
+  opacity: 0.7;
+}
+
+/* Suggestion chips — Attache aesthetic on AI Elements Suggestion */
+.chip {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  border: 1.5px solid var(--line);
+  background: transparent;
+  padding: 7px 14px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: auto;
+}
+.chip:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+/* Tool collapsible — Attache styling */
+.tool-collapsible {
+  margin-top: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line) !important;
+  border-radius: 3px !important;
+}
+.tool-header {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink2);
+  padding: 7px 14px;
+  border-bottom: 1px dashed var(--line);
+}
+.tool-header svg {
+  color: var(--brass);
+}
+.tool-body {
+  padding: 0 !important;
+}
+.tool-body .card {
+  margin-top: 0;
+  border: none;
+}
+
+/* Tool status badges — Attache aesthetic */
+.tool-collapsible [data-slot="badge"] {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: 2px;
 }
 
 /* ---------- console keyframes ---------- */
