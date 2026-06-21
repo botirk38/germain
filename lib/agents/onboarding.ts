@@ -45,6 +45,5 @@ export function createOnboardingAgent(): OnboardingAgent {
       },
     ],
     maxOutputTokens: 2000,
-    temperature: 0.3,
   });
 }
