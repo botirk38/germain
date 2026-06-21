@@ -1,11 +1,11 @@
-import type { GermainCase } from "@/lib/germain-types";
+import type { AttacheCase } from "@/lib/attache/case";
 import { ApprovalLikelihoodRing } from "@/components/ApprovalLikelihoodRing";
 import { ClRow } from "@/components/attache/Card";
 
 // Case file panel: approval ring + key facts as dotted-leader rows, then
 // unresolved recommendations (amber) and risk flags (clay). Empty sections
 // are omitted.
-export function CaseFacts({ caseState }: { caseState: GermainCase }) {
+export function CaseFacts({ caseState }: { caseState: AttacheCase }) {
   const appointment = caseState.appointments[0];
   const { fees, financials } = caseState;
   const recommendations = caseState.recommendations

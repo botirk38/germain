@@ -2,10 +2,10 @@
 
 import { useChat, Chat } from "@ai-sdk/react";
 import { lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport, getToolName, isToolUIPart } from "ai";
-import type { GermainUIMessage } from "@/lib/agents/germain";
-import type { GermainClientToolName, GermainClientToolResult } from "@/lib/tools";
-import { deriveCase, initialCaseState } from "@/lib/case-derive";
-import { getDisplayStepIndex, deriveActionNeeded } from "@/lib/attache-display";
+import type { AttacheUIMessage } from "@/lib/attache/agent";
+import type { AttacheClientToolName, AttacheClientToolResult } from "@/lib/tools";
+import { deriveCase, initialCaseState } from "@/lib/attache/case";
+import { getDisplayStepIndex, deriveActionNeeded } from "@/lib/attache/display";
 import { ChatMessages } from "@/components/ChatMessages";
 import { EmptyState } from "@/components/EmptyState";
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
@@ -20,17 +20,18 @@ import { useState, type FormEvent, type ChangeEvent, type KeyboardEvent, useMemo
 const clientToolNames = new Set([
   "uploadDocuments",
   "uploadDocument",
+  "askQuestion",
   "submitApplication",
   "approveSubmission",
 ]);
 
 const userMessageCancellation = "Cancelled because the user sent a new message.";
 
-function isClientToolName(toolName: string): toolName is GermainClientToolName {
+function isClientToolName(toolName: string): toolName is AttacheClientToolName {
   return clientToolNames.has(toolName);
 }
 
-function getPendingClientTools(messages: GermainUIMessage[]) {
+function getPendingClientTools(messages: AttacheUIMessage[]) {
   return messages.flatMap((message) => {
     if (message.role !== "assistant") return [];
 
@@ -46,7 +47,7 @@ function getPendingClientTools(messages: GermainUIMessage[]) {
   });
 }
 
-function shouldContinueAfterToolOutput({ messages }: { messages: GermainUIMessage[] }) {
+function shouldContinueAfterToolOutput({ messages }: { messages: AttacheUIMessage[] }) {
   const message = messages[messages.length - 1];
   const cancelledByUserMessage = message?.role === "assistant" && message.parts?.some((part) => {
     return isToolUIPart(part) && part.state === "output-error" && part.errorText === userMessageCancellation;
@@ -55,18 +56,16 @@ function shouldContinueAfterToolOutput({ messages }: { messages: GermainUIMessag
   return !cancelledByUserMessage && lastAssistantMessageIsCompleteWithToolCalls({ messages });
 }
 
-// Create transport singleton
-const chatTransport = new DefaultChatTransport<GermainUIMessage>({
+const chatTransport = new DefaultChatTransport<AttacheUIMessage>({
   api: "/api/chat",
 });
 
-// Create chat instance
-const germainChat = new Chat<GermainUIMessage>({
+const attacheChat = new Chat<AttacheUIMessage>({
   transport: chatTransport,
   sendAutomaticallyWhen: shouldContinueAfterToolOutput,
 });
 
-export default function GermainPage() {
+export default function AttachePage() {
   const [input, setInput] = useState("");
 
   const {
@@ -76,17 +75,15 @@ export default function GermainPage() {
     sendMessage,
     regenerate,
     addToolOutput,
-  } = useChat<GermainUIMessage>({
-    chat: germainChat,
+  } = useChat<AttacheUIMessage>({
+    chat: attacheChat,
   });
 
-  // "error" must not lock the composer — only an in-flight request does.
   const requestBusy = status === "submitted" || status === "streaming";
   const pendingClientTools = useMemo(() => getPendingClientTools(messages), [messages]);
   const awaitingToolAction = pendingClientTools.length > 0;
   const busy = requestBusy;
 
-  // Derive live case state from message history
   const caseState = useMemo(() => {
     return messages.length > 0 ? deriveCase(messages) : initialCaseState;
   }, [messages]);
@@ -95,7 +92,7 @@ export default function GermainPage() {
   const actionNeeded = useMemo(() => deriveActionNeeded(messages, caseState), [messages, caseState]);
   const hasMessages = messages.length > 0;
 
-  const handleToolOutput = (result: GermainClientToolResult) => {
+  const handleToolOutput = (result: AttacheClientToolResult) => {
     switch (result.kind) {
       case "error":
         addToolOutput({
@@ -129,19 +126,16 @@ export default function GermainPage() {
     );
   };
 
-  // Handle input change
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
 
-  // Handle suggestion click from empty state
   const handleSuggestion = async (text: string) => {
     if (requestBusy) return;
     await cancelPendingClientTools(userMessageCancellation);
     sendMessage({ text });
   };
 
-  // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || requestBusy) return;
@@ -152,7 +146,6 @@ export default function GermainPage() {
     sendMessage({ text });
   };
 
-  // Handle keydown for textarea
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();

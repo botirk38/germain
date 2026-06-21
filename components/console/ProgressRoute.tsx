@@ -1,4 +1,4 @@
-import { DISPLAY_STEPS } from "@/lib/attache-display";
+import { DISPLAY_STEPS } from "@/lib/attache/display";
 
 // Vertical route progress: sage-filled nodes for done legs, brass halo for the
 // current leg, hollow nodes for what's ahead.

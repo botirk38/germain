@@ -21,6 +21,27 @@ const recommendationSchema = z.object({
   category: z.enum(["funds", "ties", "employment", "travel", "insurance", "consistency", "completeness"]),
 });
 
+export const reviewAndPrepareOutputSchema = z.object({
+  documentReviews: z.array(z.object({
+    type: z.string(),
+    status: z.enum(["verified", "needs_review", "rejected"]),
+    extractedFields: z.record(z.string()),
+    issues: z.array(issueSchema),
+  })),
+  formData: z.record(z.string()),
+  consistencyCheck: z.object({
+    passed: z.boolean(),
+    mismatches: z.array(z.string()),
+  }),
+  coverLetter: z.string(),
+  itinerary: z.string(),
+  proofOfTies: z.array(z.string()),
+  recommendations: z.array(recommendationSchema),
+  approvalLikelihood: z.number(),
+});
+
+export type ReviewAndPrepareOutput = z.infer<typeof reviewAndPrepareOutputSchema>;
+
 export const reviewAndPrepareTool = tool({
   description: "Review all uploaded documents, verify validity, generate the application form from case data, and prepare supporting documents (cover letter, itinerary, proof of ties). Call this after documents are uploaded.",
   inputSchema: z.object({
@@ -46,24 +67,7 @@ export const reviewAndPrepareTool = tool({
     tripBudget: z.number().describe("Estimated total trip cost in EUR"),
     bankBalance: z.number().optional().describe("Known bank balance if available"),
   }),
-  outputSchema: z.object({
-    documentReviews: z.array(z.object({
-      type: z.string(),
-      status: z.enum(["verified", "needs_review", "rejected"]),
-      extractedFields: z.record(z.string()),
-      issues: z.array(issueSchema),
-    })),
-    formData: z.record(z.string()),
-    consistencyCheck: z.object({
-      passed: z.boolean(),
-      mismatches: z.array(z.string()),
-    }),
-    coverLetter: z.string(),
-    itinerary: z.string(),
-    proofOfTies: z.array(z.string()),
-    recommendations: z.array(recommendationSchema),
-    approvalLikelihood: z.number(),
-  }),
+  outputSchema: reviewAndPrepareOutputSchema,
   execute: async (input, _options: ToolExecutionOptions) => {
     const { documents, applicantProfile, travelDetails, tripBudget, bankBalance } = input;
     const recommendations: z.infer<typeof recommendationSchema>[] = [];

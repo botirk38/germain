@@ -108,6 +108,30 @@ const PURPOSE_TO_CATEGORY: Record<string, string> = {
   transit: "transit",
 };
 
+export const evaluateCaseOutputSchema = z.object({
+  eligible: z.boolean(),
+  visaType: z.string(),
+  visaCategory: z.enum(["tourist", "business", "student", "work", "family", "transit"]),
+  consulate: z.string(),
+  processingTime: z.string(),
+  fees: z.object({
+    visa: z.number(),
+    service: z.number(),
+    vac: z.number(),
+    total: z.number(),
+  }),
+  baseLikelihood: z.number(),
+  reasoning: z.string(),
+  requiredDocuments: z.array(z.object({
+    type: z.string(),
+    description: z.string(),
+    critical: z.boolean(),
+  })),
+  optionalDocuments: z.array(z.string()),
+});
+
+export type EvaluateCaseOutput = z.infer<typeof evaluateCaseOutputSchema>;
+
 export const evaluateCaseTool = tool({
   description: "Evaluate visa eligibility, select the correct visa route, and generate a tailored document checklist. This is the first tool to call for any new visa case.",
   inputSchema: z.object({
@@ -125,27 +149,7 @@ export const evaluateCaseTool = tool({
     familyInHomeCountry: z.boolean(),
     propertyOwned: z.boolean(),
   }),
-  outputSchema: z.object({
-    eligible: z.boolean(),
-    visaType: z.string(),
-    visaCategory: z.enum(["tourist", "business", "student", "work", "family", "transit"]),
-    consulate: z.string(),
-    processingTime: z.string(),
-    fees: z.object({
-      visa: z.number(),
-      service: z.number(),
-      vac: z.number(),
-      total: z.number(),
-    }),
-    baseLikelihood: z.number(),
-    reasoning: z.string(),
-    requiredDocuments: z.array(z.object({
-      type: z.string(),
-      description: z.string(),
-      critical: z.boolean(),
-    })),
-    optionalDocuments: z.array(z.string()),
-  }),
+  outputSchema: evaluateCaseOutputSchema,
   execute: async (input, _options: ToolExecutionOptions) => {
     const {
       nationality, residenceCountry, residenceCity, purpose,
