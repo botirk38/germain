@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
-import { SignInButton, UserButton } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs";
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { HeroMock } from "@/components/landing/HeroMock";
 
@@ -9,10 +8,7 @@ export const metadata: Metadata = {
   title: "Attache — your visa, handled",
 };
 
-export default async function Home() {
-  const { userId } = await auth();
-  const isSignedIn = Boolean(userId);
-
+export default function Home() {
   return (
     <div className="landing">
       {/* ================= NAV ================= */}
@@ -29,25 +25,24 @@ export default async function Home() {
             <a className="link" href="#status">
               Always informed
             </a>
-            {isSignedIn ? (
-              <>
-                <Link className="key" href="/chat">
-                  Open the console
-                </Link>
-                <UserButton />
-              </>
-            ) : (
-              <>
-                <SignInButton mode="modal">
-                  <button type="button" className="link">
-                    Sign in
-                  </button>
-                </SignInButton>
-                <Link className="key" href="/sign-up">
+            <Show when="signed-in">
+              <Link className="key" href="/chat">
+                Open the console
+              </Link>
+              <UserButton />
+            </Show>
+            <Show when="signed-out">
+              <SignInButton mode="modal">
+                <button type="button" className="link">
+                  Sign in
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button type="button" className="key">
                   Get started
-                </Link>
-              </>
-            )}
+                </button>
+              </SignUpButton>
+            </Show>
           </nav>
         </div>
       </header>
@@ -64,15 +59,16 @@ export default async function Home() {
               checking the consulate until there&rsquo;s a decision.
             </p>
             <div className="cta">
-              {isSignedIn ? (
+              <Show when="signed-in">
                 <Link className="key" href="/chat">
                   Open the console
                 </Link>
-              ) : (
+              </Show>
+              <Show when="signed-out">
                 <Link className="key" href="/sign-up">
                   Get started
                 </Link>
-              )}
+              </Show>
               <a className="quiet" href="#how">
                 How it works
               </a>
@@ -203,15 +199,16 @@ export default async function Home() {
             application filed, appointment booked.
           </p>
           <div className="cta">
-            {isSignedIn ? (
+            <Show when="signed-in">
               <Link className="key" href="/chat">
                 Open the console
               </Link>
-            ) : (
+            </Show>
+            <Show when="signed-out">
               <Link className="key" href="/sign-up">
                 Get started
               </Link>
-            )}
+            </Show>
           </div>
         </div>
       </section>
