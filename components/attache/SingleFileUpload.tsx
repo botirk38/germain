@@ -147,7 +147,7 @@ export function SingleFileUpload({
           <KeyButton
             onClick={submit}
             disabled={!file || isSubmitting}
-            submittingLabel="UPLOADING\u2026"
+            submittingLabel={isSubmitting ? "UPLOADING\u2026" : undefined}
           >
             UPLOAD DOCUMENT
           </KeyButton>
