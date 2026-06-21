@@ -7,6 +7,7 @@ import { KeyButton } from "@/components/attache/KeyButton";
 import { MachinePanel } from "@/components/attache/MachinePanel";
 import { SlotBox } from "@/components/attache/SlotBox";
 import { FileUpload } from "@/components/attache/FileUpload";
+import { SingleFileUpload } from "@/components/attache/SingleFileUpload";
 import { reviewStatusWord } from "@/lib/attache-display";
 import type { GermainUIMessage } from "@/lib/agents/germain";
 import type {
@@ -40,6 +41,7 @@ const toolHeaders: Record<string, string> = {
   // Consolidated tools
   evaluateCase: "CASE EVALUATION",
   uploadDocuments: "UPLOAD REQUIRED",
+  uploadDocument: "UPLOAD DOCUMENT",
   reviewAndPrepare: "REVIEW & PREPARE",
   runRiskReview: "RISK REVIEW",
   submitApplication: "SUBMIT APPLICATION",
@@ -227,6 +229,23 @@ export function UploadDocumentsToolPart({
   );
 }
 
+export function UploadDocumentToolPart({
+  part,
+  onOutput,
+}: {
+  part: ToolPart<"uploadDocument">;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <ClientToolPart
+      part={part}
+      toolName="uploadDocument"
+      onOutput={onOutput}
+      renderOutput={(output) => <ServerToolOutput toolName="uploadDocument" output={output} />}
+    />
+  );
+}
+
 export function SubmitApplicationToolPart({
   part,
   onOutput,
@@ -276,6 +295,8 @@ export function ToolPartRenderer({ part, onOutput }: ToolPartRendererProps) {
       return <MonitorCaseToolPart part={part} />;
     case "tool-uploadDocuments":
       return <UploadDocumentsToolPart part={part} onOutput={onOutput} />;
+    case "tool-uploadDocument":
+      return <UploadDocumentToolPart part={part} onOutput={onOutput} />;
     case "tool-submitApplication":
       return <SubmitApplicationToolPart part={part} onOutput={onOutput} />;
     case "tool-approveSubmission":
@@ -516,6 +537,21 @@ function ServerToolOutput({
           </div>
         </Card>
       );
+
+    case "uploadDocument": {
+      const doc = output.document as { type?: string } | undefined;
+      const docType = doc?.type ?? "document";
+      return (
+        <Card>
+          <CardHead>DOCUMENT RECEIVED</CardHead>
+          <div className="cl">
+            <SageLine>
+              ● {docType.replace(/_/g, " ").toUpperCase()} UPLOADED
+            </SageLine>
+          </div>
+        </Card>
+      );
+    }
 
     case "submitApplication":
       return (
@@ -892,6 +928,22 @@ function ClientToolPart<T extends GermainClientToolName>({
           });
           break;
         }
+        case "uploadDocument": {
+          const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
+          onOutput({
+            tool: "uploadDocument", toolCallId: part.toolCallId,
+            output: {
+              uploaded: true,
+              document: {
+                id: `doc-${docType}-${Date.now()}`,
+                type: docType,
+                name: `${docType.replace(/_/g, " ")}.pdf`,
+                status: "uploaded" as const,
+              },
+            },
+          });
+          break;
+        }
         case "submitApplication":
           onOutput({
             tool: "submitApplication", toolCallId: part.toolCallId,
@@ -928,6 +980,36 @@ function ClientToolPart<T extends GermainClientToolName>({
                   success: true,
                   uploadedCount: documents.length,
                   documents,
+                },
+              });
+              setIsSubmitting(false);
+            }, 800);
+          }}
+        />
+      );
+    }
+
+    case "uploadDocument": {
+      const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
+      const reason = isRecord(input) ? (input.reason as string) ?? "" : "";
+      const guidanceText = isRecord(input) ? (input.guidance as string) ?? "" : "";
+      const isCritical = isRecord(input) ? Boolean(input.critical) : false;
+      return (
+        <SingleFileUpload
+          documentType={docType}
+          reason={reason}
+          guidance={guidanceText}
+          critical={isCritical}
+          isSubmitting={isSubmitting}
+          onUpload={(document) => {
+            setIsSubmitting(true);
+            setTimeout(() => {
+              onOutput({
+                tool: "uploadDocument",
+                toolCallId: part.toolCallId,
+                output: {
+                  uploaded: true,
+                  document,
                 },
               });
               setIsSubmitting(false);

@@ -175,6 +175,18 @@ function applyToolOutput(
       break;
     }
 
+    case "uploadDocument": {
+      const doc = output.document as { type: string; name?: string } | undefined;
+      if (doc) {
+        updates.documents = state.documents.map((d) =>
+          d.type === doc.type
+            ? { ...d, status: "uploaded" as const, name: doc.name || d.name }
+            : d
+        );
+      }
+      break;
+    }
+
     case "reviewAndPrepare": {
       // Update documents from review results
       const reviews = (output.documentReviews as Array<{

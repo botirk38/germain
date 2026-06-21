@@ -132,12 +132,54 @@ const uploadDocumentsOutputSchema = z.object({
 });
 
 export const uploadDocumentsTool = tool({
-  description: "UI tool: Prompt user to upload required documents. Displays document uploader interface and waits for uploads.",
+  description: "UI tool: Prompt user to upload ALL required documents at once. Displays a bulk document uploader with all slots visible. Use this for the INITIAL upload phase when the user hasn't uploaded anything yet.",
   inputSchema: z.object({
     requiredTypes: z.array(z.enum(["passport", "bank_statement", "employment_letter", "insurance", "hotel_booking", "flight_itinerary", "invitation_letter", "property_deed"])),
     criticalDocuments: z.array(z.string()).describe("Document types that are critical and must be uploaded"),
   }),
   outputSchema: uploadDocumentsOutputSchema,
+  // No execute — client-side UI tool
+});
+
+// Single-document upload for step-by-step guided follow-up
+const documentTypeEnum = z.enum([
+  "passport", "bank_statement", "employment_letter", "insurance",
+  "hotel_booking", "flight_itinerary", "invitation_letter",
+  "property_deed", "photo", "marriage_certificate", "birth_certificate",
+]);
+
+const uploadDocumentOutputSchema = z.object({
+  uploaded: z.boolean(),
+  document: z.object({
+    id: z.string(),
+    type: z.string(),
+    name: z.string(),
+    status: z.literal("uploaded"),
+  }),
+});
+
+export const uploadDocumentTool = tool({
+  description:
+    "UI tool: Request a SINGLE document from the user with full context. " +
+    "Use this for follow-up requests when documents are insufficient after review, " +
+    "need replacement, or for RFE responses. Renders a focused upload card explaining " +
+    "why the document is needed and what makes a good upload. Call once per document — " +
+    "the user sees one focused card at a time for a guided step-by-step experience.",
+  inputSchema: z.object({
+    documentType: documentTypeEnum,
+    reason: z.string().describe(
+      "Context for why this document is needed NOW (e.g. 'Your bank statements " +
+      "show 1.2x coverage — a savings account statement would strengthen your " +
+      "funds evidence to the recommended 2x.')"
+    ),
+    guidance: z.string().describe(
+      "Specific guidance on what makes a good upload (e.g. 'Upload a PDF or " +
+      "clear photo of your most recent 3-month statement showing your name, " +
+      "account number, and closing balance.')"
+    ),
+    critical: z.boolean().describe("Whether this document is critical for approval"),
+  }),
+  outputSchema: uploadDocumentOutputSchema,
   // No execute — client-side UI tool
 });
 
@@ -155,6 +197,7 @@ export const germainServerTools = {
 
 export const germainClientTools = {
   uploadDocuments: uploadDocumentsTool,
+  uploadDocument: uploadDocumentTool,
   submitApplication: submitApplicationTool,
   approveSubmission: approveSubmissionTool,
 };
@@ -167,6 +210,7 @@ export const germainTools = {
 export type GermainTools = typeof germainTools;
 export type GermainClientToolName = keyof typeof germainClientTools;
 export type UploadDocumentsOutput = z.infer<typeof uploadDocumentsOutputSchema>;
+export type UploadDocumentOutput = z.infer<typeof uploadDocumentOutputSchema>;
 
 export type SubmitApplicationOutput = {
   sessionId: string;
@@ -184,5 +228,6 @@ export type ApproveSubmissionOutput = {
 
 export type GermainClientToolResult =
   | { tool: "uploadDocuments"; toolCallId: string; output: UploadDocumentsOutput }
+  | { tool: "uploadDocument"; toolCallId: string; output: UploadDocumentOutput }
   | { tool: "submitApplication"; toolCallId: string; output: SubmitApplicationOutput }
   | { tool: "approveSubmission"; toolCallId: string; output: ApproveSubmissionOutput };
