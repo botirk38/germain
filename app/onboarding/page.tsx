@@ -25,7 +25,9 @@ export default function OnboardingPage() {
   const {
     messages,
     status,
+    error,
     sendMessage,
+    regenerate,
     addToolOutput,
   } = useChat<OnboardingUIMessage>({
     chat: onboardingChat,
@@ -123,6 +125,33 @@ export default function OnboardingPage() {
           />
         )}
       </div>
+
+      {/* Transmission failure */}
+      {error ? (
+        <div style={{ background: "var(--bone)" }} className="px-5 pb-3">
+          <div
+            className="mx-auto flex max-w-[680px] items-center gap-3 px-3 py-2 font-mono text-[10.5px] tracking-[0.04em]"
+            style={{
+              background: "var(--tint-problem)",
+              border: "1px solid var(--line)",
+              borderLeft: "4px solid var(--clay)",
+            }}
+          >
+            <span style={{ color: "var(--clay)" }}>✕ Problem</span>
+            <span className="flex-1 text-ink2">
+              Transmission failed — the model request was refused (often a rate limit). Wait a moment, then retry.
+            </span>
+            <button
+              type="button"
+              onClick={() => regenerate()}
+              className="btn shrink-0"
+              style={{ padding: "4px 10px" }}
+            >
+              ↻ RETRY
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Input bar */}
       <form onSubmit={handleSubmit} className="inputbar">
