@@ -36,8 +36,9 @@ export type AttacheTools = typeof attacheTools;
 export type AttacheClientToolName = keyof typeof attacheClientTools;
 
 export type AttacheClientToolResult =
-  | { tool: "uploadDocuments"; toolCallId: string; output: UploadDocumentsOutput }
-  | { tool: "uploadDocument"; toolCallId: string; output: UploadDocumentOutput }
-  | { tool: "askQuestion"; toolCallId: string; output: AskQuestionOutput }
-  | { tool: "submitApplication"; toolCallId: string; output: SubmitApplicationOutput }
-  | { tool: "approveSubmission"; toolCallId: string; output: ApproveSubmissionOutput };
+  | { kind: "output"; tool: "uploadDocuments"; toolCallId: string; output: UploadDocumentsOutput }
+  | { kind: "output"; tool: "uploadDocument"; toolCallId: string; output: UploadDocumentOutput }
+  | { kind: "output"; tool: "askQuestion"; toolCallId: string; output: AskQuestionOutput }
+  | { kind: "output"; tool: "submitApplication"; toolCallId: string; output: SubmitApplicationOutput }
+  | { kind: "output"; tool: "approveSubmission"; toolCallId: string; output: ApproveSubmissionOutput }
+  | { kind: "error"; tool: AttacheClientToolName; toolCallId: string; errorText: string };

@@ -50,6 +50,11 @@ const toolHeaders: Record<string, string> = {
   monitorCase: "CASE MONITOR",
 };
 
+function skippedMessage(toolName: AttacheClientToolName) {
+  const label = toolHeaders[toolName] ?? toolName;
+  return `User skipped ${label}. Continue without this result if possible, and explain any visa approval risk.`;
+}
+
 function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
   return (
     <article
@@ -82,22 +87,48 @@ function SageLine({ children }: { children: ReactNode }) {
   );
 }
 
-function ToolErrorCard({ header, errorText }: { header: string; errorText?: string }) {
+function ToolSkippedCard({ header, errorText }: { header: string; errorText?: string }) {
   return (
-    <article
-      className="card"
-      style={{ borderLeft: "4px solid var(--clay)" }}
-    >
+    <article className="card">
       <CardHead>{header}</CardHead>
       <div className="notam-body">
-        <StatusMark word="problem" />
-        {errorText ? (
-          <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-            {errorText}
-          </div>
-        ) : null}
+        <StatusMark word="check" />
+        <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
+          {errorText ?? "Skipped by user. Attache will continue with reduced confidence where possible."}
+        </div>
       </div>
     </article>
+  );
+}
+
+function SkipToolAction({
+  toolName,
+  toolCallId,
+  disabled,
+  onOutput,
+}: {
+  toolName: AttacheClientToolName;
+  toolCallId: string;
+  disabled: boolean;
+  onOutput: (result: AttacheClientToolResult) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="btn"
+      style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--ink2)" }}
+      disabled={disabled}
+      onClick={() => {
+        onOutput({
+          kind: "error",
+          tool: toolName,
+          toolCallId,
+          errorText: skippedMessage(toolName),
+        });
+      }}
+    >
+      SKIP
+    </button>
   );
 }
 
@@ -117,7 +148,7 @@ function ToolStateCard<T extends string>({
   }
 
   if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+    return <ToolSkippedCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
   }
 
   if (part.state === "output-available" && part.output) {
@@ -587,7 +618,7 @@ function ClientToolPart<T extends AttacheClientToolName>({
   }
 
   if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+    return <ToolSkippedCard header={header} errorText={part.errorText} />;
   }
 
   if (part.state === "output-available" && part.output) {
@@ -601,20 +632,24 @@ function ClientToolPart<T extends AttacheClientToolName>({
       if (!parsed.success) return null;
       const data: UploadDocumentsInput = parsed.data;
       return (
-        <FileUpload
-          requiredTypes={data.requiredTypes}
-          criticalDocuments={data.criticalDocuments}
-          isSubmitting={isSubmitting}
-          onUpload={(documents) => {
-            setIsSubmitting(true);
-            onOutput({
-              tool: "uploadDocuments",
-              toolCallId: part.toolCallId,
-              output: { success: true, uploadedCount: documents.length, documents },
-            });
-            setIsSubmitting(false);
-          }}
-        />
+        <>
+          <FileUpload
+            requiredTypes={data.requiredTypes}
+            criticalDocuments={data.criticalDocuments}
+            isSubmitting={isSubmitting}
+            onUpload={(documents) => {
+              setIsSubmitting(true);
+              onOutput({
+                kind: "output",
+                tool: "uploadDocuments",
+                toolCallId: part.toolCallId,
+                output: { success: true, uploadedCount: documents.length, documents },
+              });
+              setIsSubmitting(false);
+            }}
+          />
+          <SkipToolAction toolName="uploadDocuments" toolCallId={part.toolCallId} disabled={isSubmitting} onOutput={onOutput} />
+        </>
       );
     }
 
@@ -623,22 +658,26 @@ function ClientToolPart<T extends AttacheClientToolName>({
       if (!parsed.success) return null;
       const data: UploadDocumentInput = parsed.data;
       return (
-        <SingleFileUpload
-          documentType={data.documentType}
-          reason={data.reason}
-          guidance={data.guidance}
-          critical={data.critical}
-          isSubmitting={isSubmitting}
-          onUpload={(document) => {
-            setIsSubmitting(true);
-            onOutput({
-              tool: "uploadDocument",
-              toolCallId: part.toolCallId,
-              output: { uploaded: true, document },
-            });
-            setIsSubmitting(false);
-          }}
-        />
+        <>
+          <SingleFileUpload
+            documentType={data.documentType}
+            reason={data.reason}
+            guidance={data.guidance}
+            critical={data.critical}
+            isSubmitting={isSubmitting}
+            onUpload={(document) => {
+              setIsSubmitting(true);
+              onOutput({
+                kind: "output",
+                tool: "uploadDocument",
+                toolCallId: part.toolCallId,
+                output: { uploaded: true, document },
+              });
+              setIsSubmitting(false);
+            }}
+          />
+          <SkipToolAction toolName="uploadDocument" toolCallId={part.toolCallId} disabled={isSubmitting} onOutput={onOutput} />
+        </>
       );
     }
 
@@ -646,19 +685,23 @@ function ClientToolPart<T extends AttacheClientToolName>({
       const parsed = askQuestionInputSchema.safeParse(input);
       if (!parsed.success) return null;
       return (
-        <AskQuestionCard
-          input={parsed.data}
-          isSubmitting={isSubmitting}
-          onSubmit={(answers) => {
-            setIsSubmitting(true);
-            onOutput({
-              tool: "askQuestion",
-              toolCallId: part.toolCallId,
-              output: { answers },
-            });
-            setIsSubmitting(false);
-          }}
-        />
+        <>
+          <AskQuestionCard
+            input={parsed.data}
+            isSubmitting={isSubmitting}
+            onSubmit={(answers) => {
+              setIsSubmitting(true);
+              onOutput({
+                kind: "output",
+                tool: "askQuestion",
+                toolCallId: part.toolCallId,
+                output: { answers },
+              });
+              setIsSubmitting(false);
+            }}
+          />
+          <SkipToolAction toolName="askQuestion" toolCallId={part.toolCallId} disabled={isSubmitting} onOutput={onOutput} />
+        </>
       );
     }
 
@@ -678,11 +721,12 @@ function ClientToolPart<T extends AttacheClientToolName>({
               ▲ This will open a browser session to fill the consulate portal.
               You will see the agent work in real time.
             </div>
-            <div style={{ paddingTop: 8 }}>
+            <div style={{ display: "flex", gap: 8, paddingTop: 8 }}>
               <KeyButton
                 onClick={() => {
                   setIsSubmitting(true);
                   onOutput({
+                    kind: "output",
                     tool: "submitApplication", toolCallId: part.toolCallId,
                     output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
                   });
@@ -693,6 +737,7 @@ function ClientToolPart<T extends AttacheClientToolName>({
               >
                 START SUBMISSION
               </KeyButton>
+              <SkipToolAction toolName="submitApplication" toolCallId={part.toolCallId} disabled={isSubmitting} onOutput={onOutput} />
             </div>
           </div>
         </Card>
@@ -720,6 +765,7 @@ function ClientToolPart<T extends AttacheClientToolName>({
                 onClick={() => {
                   setIsSubmitting(true);
                   onOutput({
+                    kind: "output",
                     tool: "approveSubmission", toolCallId: part.toolCallId,
                     output: { approved: true },
                   });
@@ -736,6 +782,7 @@ function ClientToolPart<T extends AttacheClientToolName>({
                 style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
                 onClick={() => {
                   onOutput({
+                    kind: "output",
                     tool: "approveSubmission", toolCallId: part.toolCallId,
                     output: { approved: false, userNote: "User rejected the submission" },
                   });

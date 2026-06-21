@@ -1,9 +1,9 @@
 "use client";
 
 import { useChat, Chat } from "@ai-sdk/react";
-import { lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport } from "ai";
+import { lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport, getToolName, isToolUIPart } from "ai";
 import type { AttacheUIMessage } from "@/lib/attache/agent";
-import type { AttacheClientToolResult } from "@/lib/tools";
+import type { AttacheClientToolName, AttacheClientToolResult } from "@/lib/tools";
 import { deriveCase, initialCaseState } from "@/lib/attache/case";
 import { getDisplayStepIndex, deriveActionNeeded } from "@/lib/attache/display";
 import { ChatMessages } from "@/components/ChatMessages";
@@ -17,13 +17,52 @@ import { SplitFlap } from "@/components/console/SplitFlap";
 import { CautionLamp } from "@/components/console/CautionLamp";
 import { useState, type FormEvent, type ChangeEvent, type KeyboardEvent, useMemo } from "react";
 
+const clientToolNames = new Set([
+  "uploadDocuments",
+  "uploadDocument",
+  "askQuestion",
+  "submitApplication",
+  "approveSubmission",
+]);
+
+const userMessageCancellation = "Cancelled because the user sent a new message.";
+
+function isClientToolName(toolName: string): toolName is AttacheClientToolName {
+  return clientToolNames.has(toolName);
+}
+
+function getPendingClientTools(messages: AttacheUIMessage[]) {
+  return messages.flatMap((message) => {
+    if (message.role !== "assistant") return [];
+
+    return (message.parts ?? []).flatMap((part) => {
+      if (!isToolUIPart(part)) return [];
+
+      const toolName = getToolName(part);
+      if (!isClientToolName(toolName)) return [];
+      if (part.state !== "input-streaming" && part.state !== "input-available") return [];
+
+      return [{ tool: toolName, toolCallId: part.toolCallId }];
+    });
+  });
+}
+
+function shouldContinueAfterToolOutput({ messages }: { messages: AttacheUIMessage[] }) {
+  const message = messages[messages.length - 1];
+  const cancelledByUserMessage = message?.role === "assistant" && message.parts?.some((part) => {
+    return isToolUIPart(part) && part.state === "output-error" && part.errorText === userMessageCancellation;
+  });
+
+  return !cancelledByUserMessage && lastAssistantMessageIsCompleteWithToolCalls({ messages });
+}
+
 const chatTransport = new DefaultChatTransport<AttacheUIMessage>({
   api: "/api/chat",
 });
 
 const attacheChat = new Chat<AttacheUIMessage>({
   transport: chatTransport,
-  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+  sendAutomaticallyWhen: shouldContinueAfterToolOutput,
 });
 
 export default function AttachePage() {
@@ -40,7 +79,10 @@ export default function AttachePage() {
     chat: attacheChat,
   });
 
-  const busy = status === "submitted" || status === "streaming";
+  const requestBusy = status === "submitted" || status === "streaming";
+  const pendingClientTools = useMemo(() => getPendingClientTools(messages), [messages]);
+  const awaitingToolAction = pendingClientTools.length > 0;
+  const busy = requestBusy;
 
   const caseState = useMemo(() => {
     return messages.length > 0 ? deriveCase(messages) : initialCaseState;
@@ -51,36 +93,66 @@ export default function AttachePage() {
   const hasMessages = messages.length > 0;
 
   const handleToolOutput = (result: AttacheClientToolResult) => {
-    addToolOutput({
-      tool: result.tool,
-      toolCallId: result.toolCallId,
-      state: "output-available",
-      output: result.output,
-    });
+    switch (result.kind) {
+      case "error":
+        addToolOutput({
+          tool: result.tool,
+          toolCallId: result.toolCallId,
+          state: "output-error",
+          errorText: result.errorText,
+        });
+        return;
+      case "output":
+        addToolOutput({
+          tool: result.tool,
+          toolCallId: result.toolCallId,
+          state: "output-available",
+          output: result.output,
+        });
+        return;
+    }
+  };
+
+  const cancelPendingClientTools = async (errorText: string) => {
+    await Promise.all(
+      pendingClientTools.map((pendingTool) =>
+        addToolOutput({
+          tool: pendingTool.tool,
+          toolCallId: pendingTool.toolCallId,
+          state: "output-error",
+          errorText,
+        }),
+      ),
+    );
   };
 
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
 
-  const handleSuggestion = (text: string) => {
+  const handleSuggestion = async (text: string) => {
+    if (requestBusy) return;
+    await cancelPendingClientTools(userMessageCancellation);
     sendMessage({ text });
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || busy) return;
+    if (!input.trim() || requestBusy) return;
 
-    sendMessage({ text: input });
+    const text = input;
     setInput("");
+    await cancelPendingClientTools(userMessageCancellation);
+    sendMessage({ text });
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (input.trim() && !busy) {
-        sendMessage({ text: input });
+      if (input.trim() && !requestBusy) {
+        const text = input;
         setInput("");
+        void cancelPendingClientTools(userMessageCancellation).then(() => sendMessage({ text }));
       }
     }
   };
@@ -168,11 +240,16 @@ export default function AttachePage() {
             >
               <span style={{ color: "var(--clay)" }}>✕ Problem</span>
               <span className="flex-1 text-ink2">
-                Transmission failed — the model request was refused (often a rate limit). Wait a moment, then retry.
+                {awaitingToolAction
+                  ? "A tool action is waiting. Send a new message to cancel it, or use the tool controls."
+                  : "Transmission failed — the model request was refused (often a rate limit). Wait a moment, then retry."}
               </span>
               <button
                 type="button"
-                onClick={() => regenerate()}
+                onClick={() => {
+                  if (!requestBusy && !awaitingToolAction) regenerate();
+                }}
+                disabled={requestBusy || awaitingToolAction}
                 className="btn shrink-0"
                 style={{ padding: "4px 10px" }}
               >
@@ -189,7 +266,13 @@ export default function AttachePage() {
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={busy ? "Processing…" : "Tell me about your trip…"}
+              placeholder={
+                requestBusy
+                  ? "Processing…"
+                  : awaitingToolAction
+                    ? "Send to cancel the pending tool…"
+                    : "Tell me about your trip…"
+              }
               disabled={busy}
               rows={1}
               className="max-h-[200px] flex-1 resize-none border-none bg-transparent font-mono text-[11.5px] tracking-[0.06em] text-ink outline-none placeholder:text-ink2 placeholder:opacity-60 disabled:opacity-60"
