@@ -14,11 +14,19 @@ import {
 } from "./ToolCard";
 import { Markdown } from "./attache/Markdown";
 import { Fragment } from "react";
+import { isTextUIPart, isToolUIPart } from "ai";
 
 interface ChatMessagesProps {
   messages: GermainUIMessage[];
   status: string;
   onToolOutput: (result: GermainClientToolResult) => void;
+}
+
+function hasVisibleContent(parts: GermainUIMessage["parts"]): boolean {
+  if (!parts) return false;
+  return parts.some(
+    (p) => (isTextUIPart(p) && Boolean(p.text)) || isToolUIPart(p),
+  );
 }
 
 export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesProps) {
@@ -37,7 +45,7 @@ export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesPro
             </div>
           )}
 
-          {message.role === "assistant" && (
+          {message.role === "assistant" && hasVisibleContent(message.parts) && (
             <div className="msg">
               <div className="callsign" aria-hidden="true">
                 A
