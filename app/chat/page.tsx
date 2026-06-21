@@ -54,42 +54,13 @@ export default function GermainPage() {
   const actionNeeded = useMemo(() => deriveActionNeeded(messages, caseState), [messages, caseState]);
   const hasMessages = messages.length > 0;
 
-  // Handle tool output from client-interaction tools
   const handleToolOutput = (result: GermainClientToolResult) => {
-    switch (result.tool) {
-      case "uploadDocuments":
-        addToolOutput({
-          toolCallId: result.toolCallId,
-          tool: "uploadDocuments",
-          state: "output-available",
-          output: result.output,
-        });
-        break;
-      case "uploadDocument":
-        addToolOutput({
-          toolCallId: result.toolCallId,
-          tool: "uploadDocument",
-          state: "output-available",
-          output: result.output,
-        });
-        break;
-      case "submitApplication":
-        addToolOutput({
-          toolCallId: result.toolCallId,
-          tool: "submitApplication",
-          state: "output-available",
-          output: result.output,
-        });
-        break;
-      case "approveSubmission":
-        addToolOutput({
-          toolCallId: result.toolCallId,
-          tool: "approveSubmission",
-          state: "output-available",
-          output: result.output,
-        });
-        break;
-    }
+    addToolOutput({
+      tool: result.tool,
+      toolCallId: result.toolCallId,
+      state: "output-available",
+      output: result.output,
+    });
   };
 
   // Handle input change

@@ -2,25 +2,23 @@
 
 import type { GermainUIMessage } from "@/lib/agents/germain";
 import type { GermainClientToolResult } from "@/lib/tools";
-import { ToolPartRenderer } from "./ToolCard";
+import {
+  EvaluateCaseToolPart,
+  ReviewAndPrepareToolPart,
+  RunRiskReviewToolPart,
+  MonitorCaseToolPart,
+  UploadDocumentsToolPart,
+  UploadDocumentToolPart,
+  SubmitApplicationToolPart,
+  ApproveSubmissionToolPart,
+} from "./ToolCard";
 import { Markdown } from "./attache/Markdown";
 import { Fragment } from "react";
-import { isToolUIPart } from "ai";
 
 interface ChatMessagesProps {
   messages: GermainUIMessage[];
   status: string;
   onToolOutput: (result: GermainClientToolResult) => void;
-}
-
-// Helper to extract text from message parts
-function getMessageText(message: GermainUIMessage): string {
-  if (!message.parts) return "";
-
-  const textParts = message.parts.filter((part): part is { type: "text"; text: string } =>
-    part.type === "text"
-  );
-  return textParts.map((part) => part.text).join("");
 }
 
 export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesProps) {
@@ -30,7 +28,12 @@ export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesPro
         <Fragment key={message.id}>
           {message.role === "user" && (
             <div className="msg user">
-              <div className="bubble">{getMessageText(message)}</div>
+              <div className="bubble">
+                {message.parts
+                  ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+                  .map((p) => p.text)
+                  .join("") ?? ""}
+              </div>
             </div>
           )}
 
@@ -40,27 +43,34 @@ export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesPro
                 A
               </div>
               <div className="body">
-                {/* Text content */}
-                {getMessageText(message) && <Markdown text={getMessageText(message)} />}
-
-                {/* Tool invocations - v6 API */}
-                {message.parts?.map((part, partIndex) => {
-                  if (!isToolUIPart(part)) return null;
-
-                  return (
-                    <ToolPartRenderer
-                      key={`${message.id}-tool-${partIndex}`}
-                      part={part}
-                      onOutput={onToolOutput}
-                    />
-                  );
+                {message.parts?.map((part, i) => {
+                  const key = `${message.id}-${i}`;
+                  switch (part.type) {
+                    case "text":
+                      return part.text ? <Markdown key={key} text={part.text} /> : null;
+                    case "tool-evaluateCase":
+                      return <EvaluateCaseToolPart key={key} part={part} />;
+                    case "tool-reviewAndPrepare":
+                      return <ReviewAndPrepareToolPart key={key} part={part} />;
+                    case "tool-runRiskReview":
+                      return <RunRiskReviewToolPart key={key} part={part} />;
+                    case "tool-monitorCase":
+                      return <MonitorCaseToolPart key={key} part={part} />;
+                    case "tool-uploadDocuments":
+                      return <UploadDocumentsToolPart key={key} part={part} onOutput={onToolOutput} />;
+                    case "tool-uploadDocument":
+                      return <UploadDocumentToolPart key={key} part={part} onOutput={onToolOutput} />;
+                    case "tool-submitApplication":
+                      return <SubmitApplicationToolPart key={key} part={part} onOutput={onToolOutput} />;
+                    case "tool-approveSubmission":
+                      return <ApproveSubmissionToolPart key={key} part={part} onOutput={onToolOutput} />;
+                    default:
+                      return null;
+                  }
                 })}
               </div>
             </div>
           )}
-
-          {/* System messages (context) - hidden */}
-          {message.role === "system" && null}
         </Fragment>
       ))}
 

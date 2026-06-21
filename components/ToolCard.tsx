@@ -32,11 +32,6 @@ type ToolPart<T extends string> = Extract<MessagePart, { type: `tool-${T}` }> & 
   errorText?: string;
 };
 
-interface ToolPartRendererProps {
-  part: MessagePart;
-  onOutput: (result: GermainClientToolResult) => void;
-}
-
 const toolHeaders: Record<string, string> = {
   evaluateCase: "CASE EVALUATION",
   uploadDocuments: "UPLOAD REQUIRED",
@@ -227,31 +222,6 @@ export function ApproveSubmissionToolPart({
       renderOutput={(output) => <ServerToolOutput toolName="approveSubmission" output={output} />}
     />
   );
-}
-
-// ==================== TOOL PART RENDERER ====================
-
-export function ToolPartRenderer({ part, onOutput }: ToolPartRendererProps) {
-  switch (part.type) {
-    case "tool-evaluateCase":
-      return <EvaluateCaseToolPart part={part} />;
-    case "tool-reviewAndPrepare":
-      return <ReviewAndPrepareToolPart part={part} />;
-    case "tool-runRiskReview":
-      return <RunRiskReviewToolPart part={part} />;
-    case "tool-monitorCase":
-      return <MonitorCaseToolPart part={part} />;
-    case "tool-uploadDocuments":
-      return <UploadDocumentsToolPart part={part} onOutput={onOutput} />;
-    case "tool-uploadDocument":
-      return <UploadDocumentToolPart part={part} onOutput={onOutput} />;
-    case "tool-submitApplication":
-      return <SubmitApplicationToolPart part={part} onOutput={onOutput} />;
-    case "tool-approveSubmission":
-      return <ApproveSubmissionToolPart part={part} onOutput={onOutput} />;
-    default:
-      return null;
-  }
 }
 
 // ==================== SERVER TOOL OUTPUT DISPLAY ====================
@@ -572,53 +542,51 @@ function ClientToolPart<T extends GermainClientToolName>({
   const handleAction = () => {
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      switch (toolName) {
-        case "uploadDocuments": {
-          const requiredTypes = stringArrayField(input, "requiredTypes");
-          onOutput({
-            tool: "uploadDocuments", toolCallId: part.toolCallId,
-            output: {
-              success: true,
-              uploadedCount: requiredTypes.length || 3,
-              documents: requiredTypes.map((type, i) => ({
-                id: `doc-${i}`, type, name: `${type.replace("_", " ")}.pdf`, status: "uploaded" as const,
-              })),
-            },
-          });
-          break;
-        }
-        case "uploadDocument": {
-          const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
-          onOutput({
-            tool: "uploadDocument", toolCallId: part.toolCallId,
-            output: {
-              uploaded: true,
-              document: {
-                id: `doc-${docType}-${Date.now()}`,
-                type: docType,
-                name: `${docType.replace(/_/g, " ")}.pdf`,
-                status: "uploaded" as const,
-              },
-            },
-          });
-          break;
-        }
-        case "submitApplication":
-          onOutput({
-            tool: "submitApplication", toolCallId: part.toolCallId,
-            output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
-          });
-          break;
-        case "approveSubmission":
-          onOutput({
-            tool: "approveSubmission", toolCallId: part.toolCallId,
-            output: { approved: true },
-          });
-          break;
+    switch (toolName) {
+      case "uploadDocuments": {
+        const requiredTypes = stringArrayField(input, "requiredTypes");
+        onOutput({
+          tool: "uploadDocuments", toolCallId: part.toolCallId,
+          output: {
+            success: true,
+            uploadedCount: requiredTypes.length || 3,
+            documents: requiredTypes.map((type, i) => ({
+              id: `doc-${i}`, type, name: `${type.replace("_", " ")}.pdf`, status: "uploaded" as const,
+            })),
+          },
+        });
+        break;
       }
-      setIsSubmitting(false);
-    }, 800);
+      case "uploadDocument": {
+        const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
+        onOutput({
+          tool: "uploadDocument", toolCallId: part.toolCallId,
+          output: {
+            uploaded: true,
+            document: {
+              id: `doc-${docType}-${Date.now()}`,
+              type: docType,
+              name: `${docType.replace(/_/g, " ")}.pdf`,
+              status: "uploaded" as const,
+            },
+          },
+        });
+        break;
+      }
+      case "submitApplication":
+        onOutput({
+          tool: "submitApplication", toolCallId: part.toolCallId,
+          output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
+        });
+        break;
+      case "approveSubmission":
+        onOutput({
+          tool: "approveSubmission", toolCallId: part.toolCallId,
+          output: { approved: true },
+        });
+        break;
+    }
+    setIsSubmitting(false);
   };
 
   switch (toolName) {
@@ -632,18 +600,16 @@ function ClientToolPart<T extends GermainClientToolName>({
           isSubmitting={isSubmitting}
           onUpload={(documents) => {
             setIsSubmitting(true);
-            setTimeout(() => {
-              onOutput({
-                tool: "uploadDocuments",
-                toolCallId: part.toolCallId,
-                output: {
-                  success: true,
-                  uploadedCount: documents.length,
-                  documents,
-                },
-              });
-              setIsSubmitting(false);
-            }, 800);
+            onOutput({
+              tool: "uploadDocuments",
+              toolCallId: part.toolCallId,
+              output: {
+                success: true,
+                uploadedCount: documents.length,
+                documents,
+              },
+            });
+            setIsSubmitting(false);
           }}
         />
       );
@@ -663,17 +629,15 @@ function ClientToolPart<T extends GermainClientToolName>({
           isSubmitting={isSubmitting}
           onUpload={(document) => {
             setIsSubmitting(true);
-            setTimeout(() => {
-              onOutput({
-                tool: "uploadDocument",
-                toolCallId: part.toolCallId,
-                output: {
-                  uploaded: true,
-                  document,
-                },
-              });
-              setIsSubmitting(false);
-            }, 800);
+            onOutput({
+              tool: "uploadDocument",
+              toolCallId: part.toolCallId,
+              output: {
+                uploaded: true,
+                document,
+              },
+            });
+            setIsSubmitting(false);
           }}
         />
       );
@@ -728,14 +692,12 @@ function ClientToolPart<T extends GermainClientToolName>({
               <KeyButton
                 onClick={() => {
                   setIsSubmitting(true);
-                  setTimeout(() => {
-                    onOutput({
-                      tool: "approveSubmission",
-                      toolCallId: part.toolCallId,
-                      output: { approved: true },
-                    });
-                    setIsSubmitting(false);
-                  }, 400);
+                  onOutput({
+                    tool: "approveSubmission",
+                    toolCallId: part.toolCallId,
+                    output: { approved: true },
+                  });
+                  setIsSubmitting(false);
                 }}
                 disabled={isSubmitting}
                 submittingLabel="SUBMITTING…"
