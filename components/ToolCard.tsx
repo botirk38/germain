@@ -7,6 +7,11 @@ import { KeyButton } from "@/components/attache/KeyButton";
 import { MachinePanel } from "@/components/attache/MachinePanel";
 import { SlotBox } from "@/components/attache/SlotBox";
 import { FileUpload } from "@/components/attache/FileUpload";
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+} from "@/components/ai-elements/tool";
 import { reviewStatusWord } from "@/lib/attache-display";
 import type { GermainUIMessage } from "@/lib/agents/germain";
 import type {
@@ -90,6 +95,42 @@ function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
   );
 }
 
+type ToolWrapperState =
+  | "input-streaming"
+  | "input-available"
+  | "approval-requested"
+  | "approval-responded"
+  | "output-available"
+  | "output-error"
+  | "output-denied";
+
+function ToolWrapper({
+  toolName,
+  state,
+  children,
+}: {
+  toolName: string;
+  state: ToolWrapperState;
+  children: ReactNode;
+}) {
+  const header = toolHeaders[toolName] ?? toolName.toUpperCase();
+  const isDone = state === "output-available";
+  return (
+    <Tool defaultOpen className="tool-collapsible">
+      <ToolHeader
+        title={header}
+        type="dynamic-tool"
+        state={state}
+        toolName={toolName}
+        className="tool-header"
+      />
+      <ToolContent className="tool-body">
+        {isDone ? children : <WorkingCard header={header} dashed={state === "input-streaming"} />}
+      </ToolContent>
+    </Tool>
+  );
+}
+
 function SageLine({ children }: { children: ReactNode }) {
   return (
     <div
@@ -137,19 +178,24 @@ function ToolStateCard<T extends string>({
 }) {
   const header = toolHeaders[toolName] ?? toolName.toUpperCase();
 
-  if (part.state === "input-streaming") {
-    return <WorkingCard header={header} dashed />;
-  }
+  const inner = (() => {
+    if (part.state === "input-streaming") {
+      return <WorkingCard header={header} dashed />;
+    }
+    if (part.state === "output-error" || part.state === "output-denied") {
+      return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+    }
+    if (part.state === "output-available" && part.output) {
+      return children(isRecord(part.output) ? part.output : { value: part.output });
+    }
+    return <WorkingCard header={header} />;
+  })();
 
-  if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
-  }
-
-  if (part.state === "output-available" && part.output) {
-    return children(isRecord(part.output) ? part.output : { value: part.output });
-  }
-
-  return <WorkingCard header={header} />;
+  return (
+    <ToolWrapper toolName={toolName} state={part.state}>
+      {inner}
+    </ToolWrapper>
+  );
 }
 
 // ==================== CONSOLIDATED TOOL PARTS ====================
@@ -862,15 +908,27 @@ function ClientToolPart<T extends GermainClientToolName>({
   const input = part.input;
 
   if (part.state === "input-streaming") {
-    return <WorkingCard header={header} dashed />;
+    return (
+      <ToolWrapper toolName={toolName} state={part.state}>
+        <WorkingCard header={header} dashed />
+      </ToolWrapper>
+    );
   }
 
   if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+    return (
+      <ToolWrapper toolName={toolName} state={part.state}>
+        <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />
+      </ToolWrapper>
+    );
   }
 
   if (part.state === "output-available" && part.output) {
-    return renderOutput(isRecord(part.output) ? part.output : { value: part.output });
+    return (
+      <ToolWrapper toolName={toolName} state={part.state}>
+        {renderOutput(isRecord(part.output) ? part.output : { value: part.output })}
+      </ToolWrapper>
+    );
   }
 
   const handleAction = () => {
@@ -909,119 +967,127 @@ function ClientToolPart<T extends GermainClientToolName>({
     }, 800);
   };
 
-  switch (toolName) {
-    case "uploadDocuments": {
-      const requiredTypes = stringArrayField(input, "requiredTypes");
-      const criticalDocuments = stringArrayField(input, "criticalDocuments");
-      return (
-        <FileUpload
-          requiredTypes={requiredTypes}
-          criticalDocuments={criticalDocuments}
-          isSubmitting={isSubmitting}
-          onUpload={(documents) => {
-            setIsSubmitting(true);
-            setTimeout(() => {
-              onOutput({
-                tool: "uploadDocuments",
-                toolCallId: part.toolCallId,
-                output: {
-                  success: true,
-                  uploadedCount: documents.length,
-                  documents,
-                },
-              });
-              setIsSubmitting(false);
-            }, 800);
-          }}
-        />
-      );
-    }
+  const interactiveContent = (() => {
+    switch (toolName) {
+      case "uploadDocuments": {
+        const requiredTypes = stringArrayField(input, "requiredTypes");
+        const criticalDocuments = stringArrayField(input, "criticalDocuments");
+        return (
+          <FileUpload
+            requiredTypes={requiredTypes}
+            criticalDocuments={criticalDocuments}
+            isSubmitting={isSubmitting}
+            onUpload={(documents) => {
+              setIsSubmitting(true);
+              setTimeout(() => {
+                onOutput({
+                  tool: "uploadDocuments",
+                  toolCallId: part.toolCallId,
+                  output: {
+                    success: true,
+                    uploadedCount: documents.length,
+                    documents,
+                  },
+                });
+                setIsSubmitting(false);
+              }, 800);
+            }}
+          />
+        );
+      }
 
-    case "submitApplication": {
-      const formData = isRecord(input) ? (input.formData as Record<string, string>) : {};
-      const formLines = formData
-        ? Object.entries(formData).slice(0, 6).map(([k, v]) => `${k}: ${v}`)
-        : [];
-      return (
-        <Card className="notam">
-          <CardHead>SUBMIT APPLICATION</CardHead>
-          <div className="cl">
-            {formLines.map((line, i) => (
-              <div key={i} className="poll-detail" style={{ fontSize: 11 }}>{line}</div>
-            ))}
-            <div className="poll-detail" style={{ color: "var(--amber)", marginTop: 8 }}>
-              ▲ This will open a browser session to fill the consulate portal.
-              You will see the agent work in real time.
+      case "submitApplication": {
+        const formData = isRecord(input) ? (input.formData as Record<string, string>) : {};
+        const formLines = formData
+          ? Object.entries(formData).slice(0, 6).map(([k, v]) => `${k}: ${v}`)
+          : [];
+        return (
+          <Card className="notam">
+            <CardHead>SUBMIT APPLICATION</CardHead>
+            <div className="cl">
+              {formLines.map((line, i) => (
+                <div key={i} className="poll-detail" style={{ fontSize: 11 }}>{line}</div>
+              ))}
+              <div className="poll-detail" style={{ color: "var(--amber)", marginTop: 8 }}>
+                ▲ This will open a browser session to fill the consulate portal.
+                You will see the agent work in real time.
+              </div>
+              <div style={{ paddingTop: 8 }}>
+                <KeyButton
+                  onClick={handleAction}
+                  disabled={isSubmitting}
+                  submittingLabel="LAUNCHING BROWSER…"
+                >
+                  START SUBMISSION
+                </KeyButton>
+              </div>
             </div>
-            <div style={{ paddingTop: 8 }}>
-              <KeyButton
-                onClick={handleAction}
-                disabled={isSubmitting}
-                submittingLabel="LAUNCHING BROWSER…"
-              >
-                START SUBMISSION
-              </KeyButton>
-            </div>
-          </div>
-        </Card>
-      );
-    }
+          </Card>
+        );
+      }
 
-    case "approveSubmission": {
-      const formSummary = isRecord(input) ? (input.formSummary as Record<string, string>) : {};
-      const totalFees = isRecord(input) ? numberField(input, "totalFees", 0) : 0;
-      return (
-        <Card className="notam">
-          <CardHead>APPROVE SUBMISSION</CardHead>
-          <div className="cl">
-            {formSummary && Object.entries(formSummary).map(([k, v], i) => (
-              <ClRow key={i} label={k.replace(/_/g, " ").toUpperCase()} state={v} />
-            ))}
-            <ClRow label="Total fees" state={`€${totalFees}`} />
-            <div className="poll-detail" style={{ color: "var(--amber)", marginTop: 8 }}>
-              ▲ Review the form in the browser panel. Once you approve,
-              the application will be submitted.
-            </div>
-            <div style={{ display: "flex", gap: 8, paddingTop: 10 }}>
-              <KeyButton
-                onClick={() => {
-                  setIsSubmitting(true);
-                  setTimeout(() => {
+      case "approveSubmission": {
+        const formSummary = isRecord(input) ? (input.formSummary as Record<string, string>) : {};
+        const totalFees = isRecord(input) ? numberField(input, "totalFees", 0) : 0;
+        return (
+          <Card className="notam">
+            <CardHead>APPROVE SUBMISSION</CardHead>
+            <div className="cl">
+              {formSummary && Object.entries(formSummary).map(([k, v], i) => (
+                <ClRow key={i} label={k.replace(/_/g, " ").toUpperCase()} state={v} />
+              ))}
+              <ClRow label="Total fees" state={`€${totalFees}`} />
+              <div className="poll-detail" style={{ color: "var(--amber)", marginTop: 8 }}>
+                ▲ Review the form in the browser panel. Once you approve,
+                the application will be submitted.
+              </div>
+              <div style={{ display: "flex", gap: 8, paddingTop: 10 }}>
+                <KeyButton
+                  onClick={() => {
+                    setIsSubmitting(true);
+                    setTimeout(() => {
+                      onOutput({
+                        tool: "approveSubmission",
+                        toolCallId: part.toolCallId,
+                        output: { approved: true },
+                      });
+                      setIsSubmitting(false);
+                    }, 400);
+                  }}
+                  disabled={isSubmitting}
+                  submittingLabel="SUBMITTING…"
+                >
+                  APPROVE & SUBMIT
+                </KeyButton>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
+                  onClick={() => {
                     onOutput({
                       tool: "approveSubmission",
                       toolCallId: part.toolCallId,
-                      output: { approved: true },
+                      output: { approved: false, userNote: "User rejected the submission" },
                     });
-                    setIsSubmitting(false);
-                  }, 400);
-                }}
-                disabled={isSubmitting}
-                submittingLabel="SUBMITTING…"
-              >
-                APPROVE & SUBMIT
-              </KeyButton>
-              <button
-                type="button"
-                className="btn"
-                style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
-                onClick={() => {
-                  onOutput({
-                    tool: "approveSubmission",
-                    toolCallId: part.toolCallId,
-                    output: { approved: false, userNote: "User rejected the submission" },
-                  });
-                }}
-                disabled={isSubmitting}
-              >
-                CANCEL
-              </button>
+                  }}
+                  disabled={isSubmitting}
+                >
+                  CANCEL
+                </button>
+              </div>
             </div>
-          </div>
-        </Card>
-      );
-    }
+          </Card>
+        );
+      }
 
-    default:
-      return null;
-  }
+      default:
+        return null;
+    }
+  })();
+
+  return (
+    <ToolWrapper toolName={toolName} state={part.state}>
+      {interactiveContent}
+    </ToolWrapper>
+  );
 }

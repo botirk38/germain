@@ -2,6 +2,7 @@
 
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { StatusMark } from "@/components/attache/StatusMark";
+import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
 import type { StatusWord } from "@/lib/attache-display";
 
 interface EmptyStateProps {
@@ -63,17 +64,18 @@ export function EmptyState({ onSuggestion }: EmptyStateProps) {
         </p>
 
         {/* Suggestion chips */}
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
-          {SUGGESTIONS.map((suggestion, index) => (
-            <button
-              key={index}
-              onClick={() => onSuggestion(suggestion.value)}
+        <Suggestions className="mt-8 flex-wrap justify-center">
+          {SUGGESTIONS.map((suggestion) => (
+            <Suggestion
+              key={suggestion.text}
+              suggestion={suggestion.value}
+              onClick={onSuggestion}
               className="chip"
             >
               {suggestion.text}
-            </button>
+            </Suggestion>
           ))}
-        </div>
+        </Suggestions>
 
         {/* Status vocabulary strip */}
         <div className="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-line pt-4">

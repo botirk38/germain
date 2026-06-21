@@ -15,7 +15,18 @@ import { DocChecklist } from "@/components/console/DocChecklist";
 import { CaseFacts } from "@/components/console/CaseFacts";
 import { SplitFlap } from "@/components/console/SplitFlap";
 import { CautionLamp } from "@/components/console/CautionLamp";
-import { useState, type FormEvent, type ChangeEvent, type KeyboardEvent, useMemo } from "react";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputSubmit,
+} from "@/components/ai-elements/prompt-input";
+import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
+import { useState, useMemo } from "react";
 
 // Create transport singleton
 const chatTransport = new DefaultChatTransport<GermainUIMessage>({
@@ -84,34 +95,16 @@ export default function GermainPage() {
     }
   };
 
-  // Handle input change
-  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-  };
-
   // Handle suggestion click from empty state
   const handleSuggestion = (text: string) => {
     sendMessage({ text });
   };
 
-  // Handle form submission
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || busy) return;
-
-    sendMessage({ text: input });
+  // Handle form submission via PromptInput
+  const handleSubmit = (message: PromptInputMessage) => {
+    if (!message.text.trim() || busy) return;
+    sendMessage({ text: message.text });
     setInput("");
-  };
-
-  // Handle keydown for textarea
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (input.trim() && !busy) {
-        sendMessage({ text: input });
-        setInput("");
-      }
-    }
   };
 
   return (
@@ -172,17 +165,20 @@ export default function GermainPage() {
         </header>
 
         {/* Feed */}
-        <div className="feed-wrap" style={{ background: "var(--bone)" }}>
-          {!hasMessages ? (
-            <EmptyState onSuggestion={handleSuggestion} />
-          ) : (
-            <ChatMessages
-              messages={messages}
-              status={status}
-              onToolOutput={handleToolOutput}
-            />
-          )}
-        </div>
+        <Conversation className="feed-wrap" style={{ background: "var(--bone)" }}>
+          <ConversationContent className="!gap-0 !p-0">
+            {!hasMessages ? (
+              <EmptyState onSuggestion={handleSuggestion} />
+            ) : (
+              <ChatMessages
+                messages={messages}
+                status={status}
+                onToolOutput={handleToolOutput}
+              />
+            )}
+          </ConversationContent>
+          <ConversationScrollButton className="scroll-btn" />
+        </Conversation>
 
         {/* Transmission failure */}
         {error ? (
@@ -212,34 +208,25 @@ export default function GermainPage() {
         ) : null}
 
         {/* Input bar */}
-        <form onSubmit={handleSubmit} className="inputbar">
-          <div className="input-inner">
-            <textarea
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={busy ? "Processing…" : "Transmit to Attaché…"}
-              disabled={busy}
-              rows={1}
-              className="max-h-[200px] flex-1 resize-none border-none bg-transparent font-mono text-[11.5px] tracking-[0.06em] text-ink outline-none placeholder:text-ink2 placeholder:opacity-60 disabled:opacity-60"
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = "auto";
-                target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || busy}
-              className="ptt disabled:pointer-events-none disabled:opacity-45"
-            >
-              ▸ SEND
-            </button>
-          </div>
-          <div className="mx-auto mt-2 max-w-[680px] text-center font-mono text-[8.5px] tracking-[0.16em] text-ink2 opacity-70">
-            ENTER TO SEND · SHIFT+ENTER FOR NEW LINE
-          </div>
-        </form>
+        <PromptInput onSubmit={handleSubmit} className="inputbar">
+          <PromptInputTextarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={busy ? "Processing…" : "Transmit to Attaché…"}
+            disabled={busy}
+            className="prompt-textarea"
+          />
+          <PromptInputSubmit
+            status={status}
+            disabled={!input.trim() || busy}
+            className="ptt disabled:pointer-events-none disabled:opacity-45"
+          >
+            ▸ SEND
+          </PromptInputSubmit>
+        </PromptInput>
+        <div className="prompt-hint">
+          ENTER TO SEND · SHIFT+ENTER FOR NEW LINE
+        </div>
       </main>
     </div>
   );
