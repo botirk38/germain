@@ -16,12 +16,11 @@ const b612Mono = B612_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Attaché — your visa, handled",
+  title: "Attache — your visa, handled",
   description:
-    "Attaché reviews your documents, fills in the official application, and books your embassy appointment — then keeps checking the consulate until there is a decision.",
+    "Attache reviews your documents, fills in the official application, and books your embassy appointment — then keeps checking the consulate until there is a decision.",
 };
 
-/** Clerk appearance matching the Attaché design system. */
 const clerkAppearance = {
   variables: {
     colorPrimary: "#a98f5f",
@@ -41,10 +40,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider appearance={clerkAppearance}>
-      <html lang="en" className={`${b612.variable} ${b612Mono.variable}`}>
-        <body className="font-sans text-ink">{children}</body>
-      </html>
-    </ClerkProvider>
+    <html lang="en" className={`${b612.variable} ${b612Mono.variable}`}>
+      <body className="font-sans text-ink">
+        <ClerkProvider appearance={clerkAppearance}>
+          {children}
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }
