@@ -1,8 +1,9 @@
 import { defineTool } from "eve/tools";
-import { defineState } from "eve/context";
+import { always } from "eve/tools/approval";
 import { BrowserUse } from "browser-use-sdk/v3";
 import { z } from "zod";
 import { z as browserZ } from "zod/v4";
+import { caseState, type CaseState } from "../lib/state";
 
 type SubmissionResult = {
   readonly referenceNumber?: string;
@@ -27,41 +28,6 @@ const browserSubmissionResultSchema = browserZ.object({
   formFieldsFilled: browserZ.number(),
   errors: browserZ.array(browserZ.string()).optional(),
 });
-
-type CaseState = {
-  readonly destinationCountry?: string;
-  readonly portalUrl?: string;
-  readonly documents: readonly { readonly type: string; readonly name: string; readonly storageKey?: string }[];
-  readonly applicant: {
-    readonly fullName?: string;
-    readonly nationality?: string;
-    readonly residenceCountry?: string;
-    readonly residenceCity?: string;
-    readonly employmentStatus?: string;
-    readonly employer?: string;
-    readonly jobTitle?: string;
-  };
-  readonly travel: {
-    readonly purpose?: string;
-    readonly destinationCity?: string;
-    readonly arrivalDate?: string;
-    readonly departureDate?: string;
-  };
-  readonly status: string;
-} & Record<string, unknown>;
-
-function initialCaseState(): CaseState {
-  return {
-    id: `case-${Date.now()}`,
-    destinationCountry: "",
-    documents: [],
-    applicant: {},
-    travel: {},
-    status: "intake",
-  };
-}
-
-const caseState = defineState<CaseState>("attache.case", initialCaseState);
 
 let browserClient: BrowserUse | undefined;
 
@@ -92,6 +58,22 @@ function generateFormData(state: CaseState): Record<string, string> {
   };
 }
 
+function assertSafePortalUrl(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  const hostname = url.hostname.toLowerCase();
+  const blockedHosts = new Set(["localhost", "0.0.0.0", "127.0.0.1", "::1"]);
+  const isPrivateIpv4 = /^(10\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[0-1])\.|192\.168\.)/.test(hostname);
+
+  if (url.protocol !== "https:") {
+    throw new Error("Portal URL must use HTTPS.");
+  }
+  if (blockedHosts.has(hostname) || hostname.endsWith(".localhost") || isPrivateIpv4) {
+    throw new Error("Portal URL cannot point to a local or private network address.");
+  }
+
+  return url.toString();
+}
+
 async function orchestrateSubmission(input: {
   readonly portalUrl: string;
   readonly formData: Record<string, string>;
@@ -102,17 +84,17 @@ async function orchestrateSubmission(input: {
     .map(([key, value]) => `- ${key}: ${value}`)
     .join("\n");
   const appointmentInstructions = input.preferredAppointment
-    ? `\nAfter filling the form, look for appointment booking. Preferred dates: ${input.preferredAppointment.start} to ${input.preferredAppointment.end}. Select the earliest available slot.`
+    ? `\nAfter filling the form, look for appointment booking. Preferred dates: ${input.preferredAppointment.start} to ${input.preferredAppointment.end}. Do not reserve or confirm an appointment unless the portal requires it to reach the review page.`
     : "";
   const task = `Navigate to ${input.portalUrl} and fill out the visa application form with the following information:
 
 ${formEntries}
 
 Fill each field carefully. For dropdowns, select the closest matching option.
-After filling all fields, DO NOT click the final submit button — stop at the review/preview page so the user can approve.
+Do not pay fees, reserve appointments, upload files, or click the final submit button. Stop at the review/preview page so the applicant can inspect before approving.
 ${appointmentInstructions}
 
-Return structured output with any reference number shown, appointment details if available, the number of fields filled, status, and errors.`;
+Return structured output with any reference number shown, appointment details if visible, the number of fields filled, status, and errors.`;
   const session = await client.sessions.create();
   const result = await client.run(task, {
     keepAlive: true,
@@ -123,57 +105,55 @@ Return structured output with any reference number shown, appointment details if
 }
 
 const inputSchema = z.object({
-  portal_url: z
-    .string()
-    .url()
-    .optional()
-    .describe(
-      "URL of the consular appointment/application portal. If omitted, the value stored in case state is used."
-    ),
-  preferred_appointment_start: z
-    .string()
-    .optional()
-    .describe("Earliest preferred appointment date (ISO 8601)."),
-  preferred_appointment_end: z
-    .string()
-    .optional()
-    .describe("Latest preferred appointment date (ISO 8601)."),
+  portal_url: z.string().url().optional().describe("HTTPS URL of the official consular application portal."),
+  preferred_appointment_start: z.string().date().optional().describe("Earliest preferred appointment date."),
+  preferred_appointment_end: z.string().date().optional().describe("Latest preferred appointment date."),
+});
+
+const outputSchema = z.object({
+  live_view_url: z.string(),
+  form_fields_filled: z.number(),
+  status: z.enum(["completed", "partial", "failed"]),
+  reference_number: z.string().optional(),
+  appointment_date: z.string().optional(),
+  appointment_time: z.string().optional(),
+  appointment_location: z.string().optional(),
+  confirmation_code: z.string().optional(),
+  payment_confirmation: z.string().optional(),
+  errors: z.array(z.string()).optional(),
+  case_state: z.unknown(),
 });
 
 export default defineTool({
   description:
-    "Prepare the visa application for final submission. Fills the consular portal form using the " +
-    "current case state and documents, stops at the final review page, and returns a live view URL " +
-    "so the applicant can inspect before approving submission.",
+    "With applicant approval, open the official consular portal, fill a draft application from case state, and stop at review.",
   inputSchema,
+  outputSchema,
+  needsApproval: always(),
   async execute(input) {
     const state = caseState.get();
     const portalUrl = input.portal_url ?? state.portalUrl;
 
     if (!portalUrl) {
-      throw new Error(
-        "No portal URL available. Ask the applicant for the consular portal URL before preparing submission."
-      );
+      throw new Error("No portal URL available. Ask the applicant for the official consular portal URL first.");
     }
 
+    const safePortalUrl = assertSafePortalUrl(portalUrl);
     const formData = generateFormData(state);
-
     const preferredAppointment =
       input.preferred_appointment_start && input.preferred_appointment_end
-        ? {
-            start: input.preferred_appointment_start,
-            end: input.preferred_appointment_end,
-          }
+        ? { start: input.preferred_appointment_start, end: input.preferred_appointment_end }
         : undefined;
 
     const { sessionId, liveViewUrl, result } = await orchestrateSubmission({
-      portalUrl,
+      portalUrl: safePortalUrl,
       formData,
-    preferredAppointment,
-  });
+      preferredAppointment,
+    });
 
     caseState.update((s) => ({
       ...s,
+      portalUrl: safePortalUrl,
       status: "preparing_submission",
       browserUseSessionId: sessionId,
       submissionPreview: {
@@ -186,14 +166,25 @@ export default defineTool({
       live_view_url: liveViewUrl,
       form_fields_filled: result.formFieldsFilled,
       status: result.status,
-      reference_number: result.referenceNumber,
-      appointment_date: result.appointmentDate,
-      appointment_time: result.appointmentTime,
-      appointment_location: result.appointmentLocation,
-      confirmation_code: result.confirmationCode,
-      payment_confirmation: result.paymentConfirmation,
-      errors: result.errors,
+      ...(result.referenceNumber ? { reference_number: result.referenceNumber } : {}),
+      ...(result.appointmentDate ? { appointment_date: result.appointmentDate } : {}),
+      ...(result.appointmentTime ? { appointment_time: result.appointmentTime } : {}),
+      ...(result.appointmentLocation ? { appointment_location: result.appointmentLocation } : {}),
+      ...(result.confirmationCode ? { confirmation_code: result.confirmationCode } : {}),
+      ...(result.paymentConfirmation ? { payment_confirmation: result.paymentConfirmation } : {}),
+      ...(result.errors ? { errors: [...result.errors] } : {}),
       case_state: caseState.get(),
+    };
+  },
+  toModelOutput(output) {
+    return {
+      type: "json",
+      value: {
+        prepared: output.status,
+        form_fields_filled: output.form_fields_filled,
+        has_live_review: Boolean(output.live_view_url),
+        errors: output.errors,
+      },
     };
   },
 });

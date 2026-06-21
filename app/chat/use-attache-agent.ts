@@ -1,12 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useEveAgent } from "eve/react";
 import type { HandleMessageStreamEvent, SessionState } from "eve/client";
 import { initialCaseState, initialOnboardingState } from "@/components/attache/initial-states";
 import type { CaseState, OnboardingState } from "@/components/attache/case-types";
 
 const SESSION_STORAGE_KEY = "attache:eve-session";
+const SESSION_STORAGE_VERSION = 1;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+type StoredSession = {
+  readonly version: typeof SESSION_STORAGE_VERSION;
+  readonly createdAt: number;
+  readonly session: SessionState;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -30,10 +38,25 @@ function readStoredSession(): SessionState | undefined {
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    return isSessionState(parsed) ? parsed : undefined;
+    if (!isRecord(parsed)) return undefined;
+    if (parsed.version !== SESSION_STORAGE_VERSION) return undefined;
+    if (typeof parsed.createdAt !== "number" || Date.now() - parsed.createdAt > SESSION_TTL_MS) {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      return undefined;
+    }
+    return isSessionState(parsed.session) ? parsed.session : undefined;
   } catch {
     return undefined;
   }
+}
+
+function writeStoredSession(session: SessionState): void {
+  const stored: StoredSession = {
+    version: SESSION_STORAGE_VERSION,
+    createdAt: Date.now(),
+    session,
+  };
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
 }
 
 function extractCaseState(output: unknown): CaseState | undefined {
@@ -73,7 +96,7 @@ export function useAttacheAgent() {
       if (nextOnboardingState) setOnboardingState(nextOnboardingState);
     },
     onSessionChange(session) {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+      writeStoredSession(session);
     },
   });
 
@@ -93,8 +116,8 @@ export function useAttacheAgent() {
     return { caseState: nextCaseState, onboardingState: nextOnboardingState };
   }, [agent.data.messages]);
 
-  const reset = useMemo(
-    () => () => {
+  const reset = useCallback(
+    () => {
       window.localStorage.removeItem(SESSION_STORAGE_KEY);
       setCaseState(initialCaseState());
       setOnboardingState(initialOnboardingState());

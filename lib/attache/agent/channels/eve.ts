@@ -73,5 +73,8 @@ function clerkAuth(): AuthFn<Request> {
 }
 
 export default eveChannel({
-  auth: [clerkAuth(), localDev()],
+  auth:
+    process.env.NODE_ENV === "production"
+      ? [clerkAuth()]
+      : [clerkAuth(), localDev()],
 });

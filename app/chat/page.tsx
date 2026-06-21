@@ -22,6 +22,44 @@ type UploadedDocument = {
 };
 
 const PROFILE_STORAGE_KEY = "attache:onboarding-profile";
+const PROFILE_STORAGE_VERSION = 1;
+const PROFILE_STORAGE_TTL_MS = 30 * 60 * 1000;
+
+type StoredOnboardingProfile = {
+  readonly version: typeof PROFILE_STORAGE_VERSION;
+  readonly createdAt: number;
+  readonly profile: Record<string, string | number | boolean>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readStoredOnboardingProfile(): StoredOnboardingProfile | undefined {
+  const raw = window.sessionStorage.getItem(PROFILE_STORAGE_KEY);
+  if (!raw) return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return undefined;
+    if (parsed.version !== PROFILE_STORAGE_VERSION) return undefined;
+    if (typeof parsed.createdAt !== "number" || Date.now() - parsed.createdAt > PROFILE_STORAGE_TTL_MS) {
+      window.sessionStorage.removeItem(PROFILE_STORAGE_KEY);
+      return undefined;
+    }
+    if (!isRecord(parsed.profile)) return undefined;
+    if (
+      !Object.values(parsed.profile).every(
+        (value) => typeof value === "string" || typeof value === "number" || typeof value === "boolean",
+      )
+    ) {
+      return undefined;
+    }
+    return parsed as StoredOnboardingProfile;
+  } catch {
+    return undefined;
+  }
+}
 
 function hasPendingHumanInput(messages: ReturnType<typeof useAttacheAgent>["data"]["messages"]): boolean {
   return messages.some(
@@ -36,8 +74,8 @@ function documentsMessage(documents: readonly UploadedDocument[]): string {
   return `I uploaded these documents. Please call record_documents for them:\n${lines}`;
 }
 
-function onboardingMessage(profile: string): string {
-  return `I completed the quick onboarding form. Please call save_profile with these fields, then start my visa plan:\n${profile}`;
+function onboardingMessage(profile: StoredOnboardingProfile["profile"]): string {
+  return `I completed the quick onboarding form. Please call save_profile with these fields, then start my visa plan:\n${JSON.stringify(profile, null, 2)}`;
 }
 
 export default function AttachePage() {
@@ -55,15 +93,19 @@ export default function AttachePage() {
   useEffect(() => {
     if (sentOnboardingProfile.current || requestBusy || messages.length > 0) return;
 
-    const rawProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!rawProfile) return;
+    const storedProfile = readStoredOnboardingProfile();
+    if (!storedProfile) return;
 
     sentOnboardingProfile.current = true;
-    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
-    void agent.send({
-      message: onboardingMessage(rawProfile),
-      clientContext: { onboardingProfile: rawProfile },
-    });
+    void agent
+      .send({
+        message: onboardingMessage(storedProfile.profile),
+        clientContext: { onboardingProfile: storedProfile.profile },
+      })
+      .then(() => window.sessionStorage.removeItem(PROFILE_STORAGE_KEY))
+      .catch(() => {
+        sentOnboardingProfile.current = false;
+      });
   }, [agent, messages.length, requestBusy]);
 
   const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -82,7 +124,7 @@ export default function AttachePage() {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!input.trim() || requestBusy) return;
-    const text = input;
+    const text = input.trim();
     setInput("");
     sendText(text);
   };
@@ -91,7 +133,7 @@ export default function AttachePage() {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     if (!input.trim() || requestBusy) return;
-    const text = input;
+    const text = input.trim();
     setInput("");
     sendText(text);
   };
@@ -115,7 +157,7 @@ export default function AttachePage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <aside className="hidden min-[900px]:flex w-[280px] shrink-0 flex-col overflow-y-auto border-r border-line bg-panel-dk">
         <div className="border-b border-line px-4 pb-4 pt-5">
           <div className="flex items-center gap-3">
@@ -161,6 +203,23 @@ export default function AttachePage() {
           ) : null}
         </header>
 
+        <section className="border-b border-line bg-panel-dk px-4 py-3 min-[900px]:hidden" aria-label="Case summary">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-mono text-[8.5px] uppercase tracking-[0.22em] text-ink2">Case route</div>
+              <div className="mt-1 text-sm font-semibold text-ink">
+                {caseState.destinationCountry || "Destination pending"}
+              </div>
+            </div>
+            <div className="text-right font-mono text-[9px] uppercase tracking-[0.14em] text-ink2">
+              {caseState.documents.length} docs
+            </div>
+          </div>
+          <div className="mt-3">
+            <ProgressRoute currentIndex={displayStepIndex} />
+          </div>
+        </section>
+
         <div className="feed-wrap" style={{ background: "var(--bone)" }}>
           {!hasMessages ? (
             <EmptyState onSuggestion={handleSuggestion} />
@@ -177,11 +236,11 @@ export default function AttachePage() {
         {agent.error ? (
           <div style={{ background: "var(--bone)" }} className="px-5 pb-3">
             <div
+              role="alert"
               className="mx-auto flex max-w-[680px] items-center gap-3 px-3 py-2 font-mono text-[10.5px] tracking-[0.04em]"
               style={{
                 background: "var(--tint-problem)",
-                border: "1px solid var(--line)",
-                borderLeft: "4px solid var(--clay)",
+                border: "1px solid var(--clay)",
               }}
             >
               <span style={{ color: "var(--clay)" }}>X Problem</span>
@@ -197,6 +256,7 @@ export default function AttachePage() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder={requestBusy ? "Processing..." : pendingHumanInput ? "Approve or deny the pending action above..." : "Tell me about your trip..."}
+              aria-label="Message Attaché"
               disabled={requestBusy || pendingHumanInput}
               rows={1}
               className="max-h-[200px] flex-1 resize-none border-none bg-transparent font-mono text-[11.5px] tracking-[0.06em] text-ink outline-none placeholder:text-ink2 placeholder:opacity-60 disabled:opacity-60"

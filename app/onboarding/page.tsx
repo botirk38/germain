@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,6 +11,7 @@ import { MonogramLogo } from "@/components/attache/MonogramLogo";
 
 const PROFILE_STORAGE_KEY = "attache:onboarding-profile";
 const EVE_SESSION_STORAGE_KEY = "attache:eve-session";
+const PROFILE_STORAGE_VERSION = 1;
 
 const purposeOptions = [
   { label: "Tourism", value: "tourism" },
@@ -90,7 +91,7 @@ function toProfile(form: FormState): Record<string, string | number | boolean> {
 }
 
 function requiredComplete(form: FormState): boolean {
-  return [
+  const hasRequiredFields = [
     form.fullName,
     form.nationality,
     form.residenceCountry,
@@ -101,12 +102,14 @@ function requiredComplete(form: FormState): boolean {
     form.arrivalDate,
     form.departureDate,
   ].every((value) => value.trim().length > 0);
+
+  return hasRequiredFields && form.departureDate > form.arrivalDate;
 }
 
-function Field({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+function Field({ id, label, children }: { readonly id: string; readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="space-y-2">
-      <Label className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink2">{label}</Label>
+      <Label htmlFor={id} className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink2">{label}</Label>
       {children}
     </div>
   );
@@ -124,7 +127,7 @@ function MiniCard({ label, value }: { readonly label: string; readonly value: st
 export default function OnboardingPage() {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(initialForm);
-  const canSubmit = useMemo(() => requiredComplete(form), [form]);
+  const canSubmit = requiredComplete(form);
 
   const updateText = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -139,7 +142,10 @@ export default function OnboardingPage() {
     if (!canSubmit) return;
 
     window.localStorage.removeItem(EVE_SESSION_STORAGE_KEY);
-    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(toProfile(form)));
+    window.sessionStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify({ version: PROFILE_STORAGE_VERSION, createdAt: Date.now(), profile: toProfile(form) }),
+    );
     router.push("/chat");
   };
 
@@ -192,17 +198,17 @@ export default function OnboardingPage() {
             <section className="space-y-4">
               <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">1. You</div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Full legal name">
-                  <Input value={form.fullName} onChange={updateText("fullName")} placeholder="As shown on passport" required />
+                <Field id="fullName" label="Full legal name">
+                  <Input id="fullName" value={form.fullName} onChange={updateText("fullName")} placeholder="As shown on passport" required />
                 </Field>
-                <Field label="Passport country">
-                  <Input value={form.nationality} onChange={updateText("nationality")} placeholder="Uzbekistan" required />
+                <Field id="nationality" label="Passport country">
+                  <Input id="nationality" value={form.nationality} onChange={updateText("nationality")} placeholder="Uzbekistan" required />
                 </Field>
-                <Field label="Country of residence">
-                  <Input value={form.residenceCountry} onChange={updateText("residenceCountry")} placeholder="United States" required />
+                <Field id="residenceCountry" label="Country of residence">
+                  <Input id="residenceCountry" value={form.residenceCountry} onChange={updateText("residenceCountry")} placeholder="United States" required />
                 </Field>
-                <Field label="Residence city">
-                  <Input value={form.residenceCity} onChange={updateText("residenceCity")} placeholder="New York" required />
+                <Field id="residenceCity" label="Residence city">
+                  <Input id="residenceCity" value={form.residenceCity} onChange={updateText("residenceCity")} placeholder="New York" required />
                 </Field>
               </div>
             </section>
@@ -210,33 +216,33 @@ export default function OnboardingPage() {
             <section className="space-y-4">
               <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">2. Trip</div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Destination country">
-                  <Input value={form.destinationCountry} onChange={updateText("destinationCountry")} placeholder="France" required />
+                <Field id="destinationCountry" label="Destination country">
+                  <Input id="destinationCountry" value={form.destinationCountry} onChange={updateText("destinationCountry")} placeholder="France" required />
                 </Field>
-                <Field label="Destination city optional">
-                  <Input value={form.destinationCity} onChange={updateText("destinationCity")} placeholder="Paris" />
+                <Field id="destinationCity" label="Destination city optional">
+                  <Input id="destinationCity" value={form.destinationCity} onChange={updateText("destinationCity")} placeholder="Paris" />
                 </Field>
-                <Field label="Purpose">
-                  <Select value={form.purpose} onChange={updateText("purpose")} required>
+                <Field id="purpose" label="Purpose">
+                  <Select id="purpose" value={form.purpose} onChange={updateText("purpose")} required>
                     <option value="">Choose purpose</option>
                     {purposeOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </Select>
                 </Field>
-                <Field label="Employment">
-                  <Select value={form.employmentStatus} onChange={updateText("employmentStatus")} required>
+                <Field id="employmentStatus" label="Employment">
+                  <Select id="employmentStatus" value={form.employmentStatus} onChange={updateText("employmentStatus")} required>
                     <option value="">Choose status</option>
                     {employmentOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </Select>
                 </Field>
-                <Field label="Arrival date">
-                  <Input type="date" value={form.arrivalDate} onChange={updateText("arrivalDate")} required />
+                <Field id="arrivalDate" label="Arrival date">
+                  <Input id="arrivalDate" type="date" value={form.arrivalDate} onChange={updateText("arrivalDate")} required />
                 </Field>
-                <Field label="Departure date">
-                  <Input type="date" value={form.departureDate} onChange={updateText("departureDate")} required />
+                <Field id="departureDate" label="Departure date">
+                  <Input id="departureDate" type="date" value={form.departureDate} onChange={updateText("departureDate")} required />
                 </Field>
               </div>
             </section>
@@ -244,26 +250,26 @@ export default function OnboardingPage() {
             <section className="space-y-4">
               <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">3. Approval signals</div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Employer optional">
-                  <Input value={form.employer} onChange={updateText("employer")} placeholder="Company name" />
+                <Field id="employer" label="Employer optional">
+                  <Input id="employer" value={form.employer} onChange={updateText("employer")} placeholder="Company name" />
                 </Field>
-                <Field label="Job title optional">
-                  <Input value={form.jobTitle} onChange={updateText("jobTitle")} placeholder="Product manager" />
+                <Field id="jobTitle" label="Job title optional">
+                  <Input id="jobTitle" value={form.jobTitle} onChange={updateText("jobTitle")} placeholder="Product manager" />
                 </Field>
-                <Field label="Monthly income optional">
-                  <Input type="number" min="0" inputMode="decimal" value={form.monthlyIncome} onChange={updateText("monthlyIncome")} placeholder="Approximate" />
+                <Field id="monthlyIncome" label="Monthly income optional">
+                  <Input id="monthlyIncome" type="number" min="0" inputMode="decimal" value={form.monthlyIncome} onChange={updateText("monthlyIncome")} placeholder="Approximate" />
                 </Field>
                 <div className="grid gap-3 border border-line bg-paper/60 p-3">
-                  <label className="flex items-center gap-3 text-sm text-ink">
-                    <Checkbox checked={form.familyInHomeCountry} onChange={updateBoolean("familyInHomeCountry")} />
+                  <label htmlFor="familyInHomeCountry" className="flex items-center gap-3 text-sm text-ink">
+                    <Checkbox id="familyInHomeCountry" checked={form.familyInHomeCountry} onChange={updateBoolean("familyInHomeCountry")} />
                     Family ties in home country
                   </label>
-                  <label className="flex items-center gap-3 text-sm text-ink">
-                    <Checkbox checked={form.propertyOwned} onChange={updateBoolean("propertyOwned")} />
+                  <label htmlFor="propertyOwned" className="flex items-center gap-3 text-sm text-ink">
+                    <Checkbox id="propertyOwned" checked={form.propertyOwned} onChange={updateBoolean("propertyOwned")} />
                     Property or major assets at home
                   </label>
-                  <label className="flex items-center gap-3 text-sm text-ink">
-                    <Checkbox checked={form.previousRefusals} onChange={updateBoolean("previousRefusals")} />
+                  <label htmlFor="previousRefusals" className="flex items-center gap-3 text-sm text-ink">
+                    <Checkbox id="previousRefusals" checked={form.previousRefusals} onChange={updateBoolean("previousRefusals")} />
                     Previous visa refusal
                   </label>
                 </div>
@@ -273,7 +279,7 @@ export default function OnboardingPage() {
 
           <div className="mt-7 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-5 text-ink2">
-              You can edit details with Attaché later. Required fields keep the first plan accurate.
+              You can edit details with Attaché later. Departure must be after arrival.
             </p>
             <Button type="submit" disabled={!canSubmit} size="lg" className="bg-brass text-white hover:bg-brass/90">
               Start my visa plan

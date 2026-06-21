@@ -1156,7 +1156,7 @@ body {
 .inputbar {
   border-top: 1px solid var(--line);
   background: var(--panel);
-  padding: 12px 22px 9px;
+  padding: 12px 22px calc(9px + env(safe-area-inset-bottom));
 }
 
 .input-inner {
@@ -2145,6 +2145,29 @@ body {
   }
   .trust-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .msg,
+  .poll-row,
+  .poll-detail,
+  .tk-line,
+  .tk-final,
+  .rw-plane,
+  .mcaution.on,
+  .typing .cursor,
+  .flap .cell.flip {
+    animation: none !important;
   }
 }
 
