@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import type { InputResponse } from "eve/client";
 import { useAttacheAgent } from "./use-attache-agent";
 import { actionNeeded as caseActionNeeded, getDisplayStepIndex } from "@/components/attache/display";
@@ -21,6 +21,8 @@ type UploadedDocument = {
   readonly status: "uploaded";
 };
 
+const PROFILE_STORAGE_KEY = "attache:onboarding-profile";
+
 function hasPendingHumanInput(messages: ReturnType<typeof useAttacheAgent>["data"]["messages"]): boolean {
   return messages.some(
     (message) =>
@@ -34,8 +36,13 @@ function documentsMessage(documents: readonly UploadedDocument[]): string {
   return `I uploaded these documents. Please call record_documents for them:\n${lines}`;
 }
 
+function onboardingMessage(profile: string): string {
+  return `I completed the quick onboarding form. Please call save_profile with these fields, then start my visa plan:\n${profile}`;
+}
+
 export default function AttachePage() {
   const [input, setInput] = useState("");
+  const sentOnboardingProfile = useRef(false);
   const agent = useAttacheAgent();
   const messages = agent.data.messages;
   const caseState = agent.caseState;
@@ -44,6 +51,20 @@ export default function AttachePage() {
   const hasMessages = messages.length > 0;
   const displayStepIndex = getDisplayStepIndex(caseState.status);
   const actionNeeded = caseActionNeeded(caseState) || pendingHumanInput;
+
+  useEffect(() => {
+    if (sentOnboardingProfile.current || requestBusy || messages.length > 0) return;
+
+    const rawProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!rawProfile) return;
+
+    sentOnboardingProfile.current = true;
+    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    void agent.send({
+      message: onboardingMessage(rawProfile),
+      clientContext: { onboardingProfile: rawProfile },
+    });
+  }, [agent, messages.length, requestBusy]);
 
   const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value);
