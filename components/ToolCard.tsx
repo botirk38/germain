@@ -74,11 +74,6 @@ function numberField(input: Record<string, unknown>, key: string, fallback: numb
   return typeof value === "number" ? value : fallback;
 }
 
-function _stringField(input: Record<string, unknown>, key: string): string {
-  const value = input[key];
-  return typeof value === "string" ? value : "";
-}
-
 // Working state: telex card with blinking cursor
 function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
   return (

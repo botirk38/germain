@@ -7,7 +7,7 @@ import type { RequestDocumentOutput } from "@/lib/tools/onboarding-tools";
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { SplitFlap } from "@/components/console/SplitFlap";
 import { OnboardingMessages } from "@/components/OnboardingMessages";
-import { useState, type FormEvent, type ChangeEvent, type KeyboardEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent, type ChangeEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 const chatTransport = new DefaultChatTransport<OnboardingUIMessage>({
@@ -51,10 +51,13 @@ export default function OnboardingPage() {
     )
   );
 
-  if (isComplete) {
-    // Redirect to main console after brief delay
-    setTimeout(() => router.push("/chat"), 1500);
-  }
+  const redirected = useRef(false);
+  useEffect(() => {
+    if (!isComplete || redirected.current) return;
+    redirected.current = true;
+    const id = setTimeout(() => router.push("/chat"), 1500);
+    return () => clearTimeout(id);
+  }, [isComplete, router]);
 
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);

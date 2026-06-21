@@ -91,12 +91,7 @@ export default function GermainPage() {
 
   // Handle suggestion click from empty state
   const handleSuggestion = (text: string) => {
-    setInput(text);
-    // Auto-submit after brief delay
-    setTimeout(() => {
-      sendMessage({ text });
-      setInput("");
-    }, 100);
+    sendMessage({ text });
   };
 
   // Handle form submission
