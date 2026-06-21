@@ -41,10 +41,6 @@ const VOCAB_WORDS: StatusWord[] = [
 ];
 
 export function EmptyState({ onSuggestion }: EmptyStateProps) {
-  const handleSuggestion = (value: string) => {
-    onSuggestion(value);
-  };
-
   return (
     <div className="h-full flex flex-col items-center justify-center px-4">
       <div className="flex flex-col items-center text-center max-w-xl">
@@ -71,7 +67,7 @@ export function EmptyState({ onSuggestion }: EmptyStateProps) {
           {SUGGESTIONS.map((suggestion, index) => (
             <button
               key={index}
-              onClick={() => handleSuggestion(suggestion.value)}
+              onClick={() => onSuggestion(suggestion.value)}
               className="chip"
             >
               {suggestion.text}
