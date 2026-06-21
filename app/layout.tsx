@@ -20,9 +20,9 @@ const b612Mono = B612_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Attache — your visa, handled",
+  title: "Attache — stop losing weeks to visa paperwork",
   description:
-    "Attache reviews your documents, fills in the official application, and books your embassy appointment — then keeps checking the consulate until there is a decision.",
+    "Attache is an AI visa agent that checks your documents, fills the official application, and books your embassy appointment. From upload to decision in days, not weeks.",
 };
 
 const clerkAppearance = {

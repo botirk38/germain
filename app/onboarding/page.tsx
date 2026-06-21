@@ -103,19 +103,24 @@ export default function OnboardingPage() {
         {messages.length === 0 ? (
           <div className="mx-auto flex max-w-[680px] flex-col items-center gap-6 px-5 py-16 text-center">
             <MonogramLogo size={48} />
-            <h2 className="text-[22px] font-bold text-ink">Welcome to Attache</h2>
+            <h2 className="text-[22px] font-bold text-ink">Let&apos;s get you on your way.</h2>
             <p className="max-w-[460px] text-[13px] leading-relaxed text-ink2">
-              Before we start your visa case, let me learn a little about you.
-              This takes about two minutes and helps me prepare everything
-              you will need.
+              Two minutes of details now saves weeks of back-and-forth later.
+              I&apos;ll ask about your trip, then prepare everything you need
+              for the consulate.
             </p>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => sendMessage({ text: "Hello, I'd like to start my visa application." })}
-            >
-              Begin
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => sendMessage({ text: "Hello, I'd like to start my visa application." })}
+              >
+                Let&apos;s go
+              </button>
+              <span className="font-mono text-[9px] tracking-[0.14em] text-ink2">
+                ~ 2 MIN
+              </span>
+            </div>
           </div>
         ) : (
           <OnboardingMessages
