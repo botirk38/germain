@@ -57,6 +57,11 @@ function numberField(input: Record<string, unknown>, key: string, fallback: numb
   return typeof value === "number" ? value : fallback;
 }
 
+function skippedMessage(toolName: GermainClientToolName) {
+  const label = toolHeaders[toolName] ?? toolName;
+  return `User skipped ${label}. Continue without this result if possible, and explain any visa approval risk.`;
+}
+
 // Working state: telex card with blinking cursor
 function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
   return (
@@ -90,22 +95,48 @@ function SageLine({ children }: { children: ReactNode }) {
   );
 }
 
-function ToolErrorCard({ header, errorText }: { header: string; errorText?: string }) {
+function ToolSkippedCard({ header, errorText }: { header: string; errorText?: string }) {
   return (
-    <article
-      className="card"
-      style={{ borderLeft: "4px solid var(--clay)" }}
-    >
+    <article className="card">
       <CardHead>{header}</CardHead>
       <div className="notam-body">
-        <StatusMark word="problem" />
-        {errorText ? (
-          <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-            {errorText}
-          </div>
-        ) : null}
+        <StatusMark word="check" />
+        <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
+          {errorText ?? "Skipped by user. Attache will continue with reduced confidence where possible."}
+        </div>
       </div>
     </article>
+  );
+}
+
+function SkipToolAction({
+  toolName,
+  toolCallId,
+  disabled,
+  onOutput,
+}: {
+  toolName: GermainClientToolName;
+  toolCallId: string;
+  disabled: boolean;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="btn"
+      style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--ink2)" }}
+      disabled={disabled}
+      onClick={() => {
+        onOutput({
+          kind: "error",
+          tool: toolName,
+          toolCallId,
+          errorText: skippedMessage(toolName),
+        });
+      }}
+    >
+      SKIP
+    </button>
   );
 }
 
@@ -125,7 +156,7 @@ function ToolStateCard<T extends string>({
   }
 
   if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+    return <ToolSkippedCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
   }
 
   if (part.state === "output-available" && part.output) {
@@ -532,7 +563,7 @@ function ClientToolPart<T extends GermainClientToolName>({
   }
 
   if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolErrorCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+    return <ToolSkippedCard header={header} errorText={part.errorText} />;
   }
 
   if (part.state === "output-available" && part.output) {
@@ -546,6 +577,7 @@ function ClientToolPart<T extends GermainClientToolName>({
       case "uploadDocuments": {
         const requiredTypes = stringArrayField(input, "requiredTypes");
         onOutput({
+          kind: "output",
           tool: "uploadDocuments", toolCallId: part.toolCallId,
           output: {
             success: true,
@@ -560,6 +592,7 @@ function ClientToolPart<T extends GermainClientToolName>({
       case "uploadDocument": {
         const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
         onOutput({
+          kind: "output",
           tool: "uploadDocument", toolCallId: part.toolCallId,
           output: {
             uploaded: true,
@@ -575,12 +608,14 @@ function ClientToolPart<T extends GermainClientToolName>({
       }
       case "submitApplication":
         onOutput({
+          kind: "output",
           tool: "submitApplication", toolCallId: part.toolCallId,
           output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
         });
         break;
       case "approveSubmission":
         onOutput({
+          kind: "output",
           tool: "approveSubmission", toolCallId: part.toolCallId,
           output: { approved: true },
         });
@@ -594,24 +629,35 @@ function ClientToolPart<T extends GermainClientToolName>({
       const requiredTypes = stringArrayField(input, "requiredTypes");
       const criticalDocuments = stringArrayField(input, "criticalDocuments");
       return (
-        <FileUpload
-          requiredTypes={requiredTypes}
-          criticalDocuments={criticalDocuments}
-          isSubmitting={isSubmitting}
-          onUpload={(documents) => {
-            setIsSubmitting(true);
-            onOutput({
-              tool: "uploadDocuments",
-              toolCallId: part.toolCallId,
-              output: {
-                success: true,
-                uploadedCount: documents.length,
-                documents,
-              },
-            });
-            setIsSubmitting(false);
-          }}
-        />
+        <>
+          <FileUpload
+            requiredTypes={requiredTypes}
+            criticalDocuments={criticalDocuments}
+            isSubmitting={isSubmitting}
+            onUpload={(documents) => {
+              setIsSubmitting(true);
+              onOutput({
+                kind: "output",
+                tool: "uploadDocuments",
+                toolCallId: part.toolCallId,
+                output: {
+                  success: true,
+                  uploadedCount: documents.length,
+                  documents,
+                },
+              });
+              setIsSubmitting(false);
+            }}
+          />
+          <div style={{ maxWidth: 680, margin: "8px auto 0", display: "flex", justifyContent: "flex-end" }}>
+            <SkipToolAction
+              toolName="uploadDocuments"
+              toolCallId={part.toolCallId}
+              disabled={isSubmitting}
+              onOutput={onOutput}
+            />
+          </div>
+        </>
       );
     }
 
@@ -621,25 +667,36 @@ function ClientToolPart<T extends GermainClientToolName>({
       const guidanceText = isRecord(input) ? (input.guidance as string) ?? "" : "";
       const isCritical = isRecord(input) ? Boolean(input.critical) : false;
       return (
-        <SingleFileUpload
-          documentType={docType}
-          reason={reason}
-          guidance={guidanceText}
-          critical={isCritical}
-          isSubmitting={isSubmitting}
-          onUpload={(document) => {
-            setIsSubmitting(true);
-            onOutput({
-              tool: "uploadDocument",
-              toolCallId: part.toolCallId,
-              output: {
-                uploaded: true,
-                document,
-              },
-            });
-            setIsSubmitting(false);
-          }}
-        />
+        <>
+          <SingleFileUpload
+            documentType={docType}
+            reason={reason}
+            guidance={guidanceText}
+            critical={isCritical}
+            isSubmitting={isSubmitting}
+            onUpload={(document) => {
+              setIsSubmitting(true);
+              onOutput({
+                kind: "output",
+                tool: "uploadDocument",
+                toolCallId: part.toolCallId,
+                output: {
+                  uploaded: true,
+                  document,
+                },
+              });
+              setIsSubmitting(false);
+            }}
+          />
+          <div style={{ maxWidth: 680, margin: "8px auto 0", display: "flex", justifyContent: "flex-end" }}>
+            <SkipToolAction
+              toolName="uploadDocument"
+              toolCallId={part.toolCallId}
+              disabled={isSubmitting}
+              onOutput={onOutput}
+            />
+          </div>
+        </>
       );
     }
 
@@ -659,7 +716,7 @@ function ClientToolPart<T extends GermainClientToolName>({
               ▲ This will open a browser session to fill the consulate portal.
               You will see the agent work in real time.
             </div>
-            <div style={{ paddingTop: 8 }}>
+            <div style={{ display: "flex", gap: 8, paddingTop: 8 }}>
               <KeyButton
                 onClick={handleAction}
                 disabled={isSubmitting}
@@ -667,6 +724,12 @@ function ClientToolPart<T extends GermainClientToolName>({
               >
                 START SUBMISSION
               </KeyButton>
+              <SkipToolAction
+                toolName="submitApplication"
+                toolCallId={part.toolCallId}
+                disabled={isSubmitting}
+                onOutput={onOutput}
+              />
             </div>
           </div>
         </Card>
@@ -693,6 +756,7 @@ function ClientToolPart<T extends GermainClientToolName>({
                 onClick={() => {
                   setIsSubmitting(true);
                   onOutput({
+                    kind: "output",
                     tool: "approveSubmission",
                     toolCallId: part.toolCallId,
                     output: { approved: true },
@@ -710,6 +774,7 @@ function ClientToolPart<T extends GermainClientToolName>({
                 style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
                 onClick={() => {
                   onOutput({
+                    kind: "output",
                     tool: "approveSubmission",
                     toolCallId: part.toolCallId,
                     output: { approved: false, userNote: "User rejected the submission" },
@@ -719,6 +784,12 @@ function ClientToolPart<T extends GermainClientToolName>({
               >
                 CANCEL
               </button>
+              <SkipToolAction
+                toolName="approveSubmission"
+                toolCallId={part.toolCallId}
+                disabled={isSubmitting}
+                onOutput={onOutput}
+              />
             </div>
           </div>
         </Card>

@@ -227,7 +227,8 @@ export type ApproveSubmissionOutput = {
 };
 
 export type GermainClientToolResult =
-  | { tool: "uploadDocuments"; toolCallId: string; output: UploadDocumentsOutput }
-  | { tool: "uploadDocument"; toolCallId: string; output: UploadDocumentOutput }
-  | { tool: "submitApplication"; toolCallId: string; output: SubmitApplicationOutput }
-  | { tool: "approveSubmission"; toolCallId: string; output: ApproveSubmissionOutput };
+  | { kind: "output"; tool: "uploadDocuments"; toolCallId: string; output: UploadDocumentsOutput }
+  | { kind: "output"; tool: "uploadDocument"; toolCallId: string; output: UploadDocumentOutput }
+  | { kind: "output"; tool: "submitApplication"; toolCallId: string; output: SubmitApplicationOutput }
+  | { kind: "output"; tool: "approveSubmission"; toolCallId: string; output: ApproveSubmissionOutput }
+  | { kind: "error"; tool: GermainClientToolName; toolCallId: string; errorText: string };

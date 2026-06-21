@@ -55,6 +55,5 @@ export function createGermainAgent(): GermainAgent {
       },
     ],
     maxOutputTokens: 4000,
-    temperature: 0.2, // Lower temperature for consistent, factual responses
   });
 }
