@@ -218,7 +218,7 @@ export default function GermainPage() {
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={busy ? "Processing…" : "Transmit to Attaché…"}
+              placeholder={busy ? "Processing…" : "Tell me about your trip…"}
               disabled={busy}
               rows={1}
               className="max-h-[200px] flex-1 resize-none border-none bg-transparent font-mono text-[11.5px] tracking-[0.06em] text-ink outline-none placeholder:text-ink2 placeholder:opacity-60 disabled:opacity-60"

@@ -10,24 +10,16 @@ interface EmptyStateProps {
 
 const SUGGESTIONS = [
   {
-    text: "Germany tourist visa from US",
+    text: "Tourist visa — US to Germany",
     value: "I need a tourist visa for Germany. I'm a US citizen planning to visit Berlin for a week in January.",
   },
   {
-    text: "Business visa application",
+    text: "Business visa — conference in Frankfurt",
     value: "I need a business visa for a conference in Frankfurt. I work for a tech company.",
   },
   {
-    text: "Student visa guidance",
+    text: "Student visa — studying abroad",
     value: "I'm applying for a student visa to study in Germany. What documents do I need?",
-  },
-  {
-    text: "Family visit visa",
-    value: "I want to visit my family in Germany. What type of visa should I apply for?",
-  },
-  {
-    text: "Schengen visa help",
-    value: "I need help with a Schengen visa application. Where do I start?",
   },
 ];
 
@@ -55,11 +47,11 @@ export function EmptyState({ onSuggestion }: EmptyStateProps) {
         <p className="kicker mt-6">AI VISA AGENT</p>
 
         {/* Heading + description */}
-        <h1 className="text-3xl font-bold mt-3">Your visa, handled.</h1>
+        <h1 className="text-3xl font-bold mt-3">Ready when you are.</h1>
         <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ink2">
-          Attaché reviews your documents, books your appointment, and walks
-          your application through to a decision — telling you plainly what
-          needs attention along the way.
+          Tell me where you&apos;re going and I&apos;ll handle the rest —
+          documents, forms, appointments, and monitoring until you have a
+          decision.
         </p>
 
         {/* Suggestion chips */}

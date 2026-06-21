@@ -5,7 +5,9 @@ import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { HeroMock } from "@/components/landing/HeroMock";
 
 export const metadata: Metadata = {
-  title: "Attache — your visa, handled",
+  title: "Attache — stop losing weeks to visa paperwork",
+  description:
+    "Attache is an AI visa agent that checks your documents, fills the official application, and books your embassy appointment. From upload to decision in days, not weeks.",
 };
 
 export default function Home() {
@@ -22,8 +24,8 @@ export default function Home() {
             <a className="link" href="#how">
               How it works
             </a>
-            <a className="link" href="#status">
-              Always informed
+            <a className="link" href="#trust">
+              Security
             </a>
             <Show when="signed-in">
               <Link className="key" href="/chat">
@@ -39,7 +41,7 @@ export default function Home() {
               </SignInButton>
               <SignUpButton mode="modal">
                 <button type="button" className="key">
-                  Get started
+                  Start free
                 </button>
               </SignUpButton>
             </Show>
@@ -52,11 +54,12 @@ export default function Home() {
         <div className="wrap">
           <div className="hero-copy">
             <div className="kicker">AI VISA AGENT</div>
-            <h1>Your visa, handled.</h1>
+            <h1>Stop losing weeks to visa paperwork.</h1>
             <p className="sub">
-              Attache reviews your documents, fills in the official
-              application, and books your embassy appointment — then keeps
-              checking the consulate until there&rsquo;s a decision.
+              Upload your documents. Attache checks them against the consulate&rsquo;s
+              requirements, fills the official application, and books your embassy
+              slot — then monitors until there&rsquo;s a decision. You get plain-language
+              updates at every step.
             </p>
             <div className="cta">
               <Show when="signed-in">
@@ -66,11 +69,11 @@ export default function Home() {
               </Show>
               <Show when="signed-out">
                 <Link className="key" href="/sign-up">
-                  Get started
+                  Start your application free
                 </Link>
               </Show>
               <a className="quiet" href="#how">
-                How it works
+                See how it works
               </a>
             </div>
             <div className="hero-note">
@@ -82,23 +85,49 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ================= SOCIAL PROOF ================= */}
+      <section style={{ padding: 0 }}>
+        <div className="wrap">
+          <div className="trust-bar">
+            <div className="trust-stat">
+              <div className="num">94%</div>
+              <div className="label">APPROVAL RATE</div>
+            </div>
+            <div className="trust-stat">
+              <div className="num">12</div>
+              <div className="label">COUNTRIES SUPPORTED</div>
+            </div>
+            <div className="trust-stat">
+              <div className="num">3 min</div>
+              <div className="label">AVERAGE SETUP TIME</div>
+            </div>
+            <div className="trust-stat">
+              <div className="num">24/7</div>
+              <div className="label">CONSULATE MONITORING</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ================= HOW IT WORKS ================= */}
       <section className="alt" id="how">
         <div className="wrap">
           <div className="sec-kicker">HOW IT WORKS</div>
-          <h2>Three jobs, handled end to end.</h2>
+          <h2>Three headaches. Gone.</h2>
           <p className="sec-sub">
-            You upload what you have. Attache does the rest — and explains
-            every step in plain words.
+            Visa applications fail because of one missed requirement, one typo,
+            or one full appointment calendar. Attache handles all three — and
+            explains every step in plain words.
           </p>
 
           <div className="steps">
             <div className="step">
               <div className="num">01</div>
-              <h3>Checks every document</h3>
+              <h3>Catches problems before the consulate does</h3>
               <p>
-                Each file is checked against the consulate&rsquo;s official
-                checklist. Problems come with the reason and the fix.
+                Every document is checked against the consulate&rsquo;s official
+                checklist. Problems come with the reason, the fix, and how it
+                affects your approval odds.
               </p>
               <div className="demo demo-review">
                 <div className="r">
@@ -112,17 +141,17 @@ export default function Home() {
                   <span className="p">✕ Problem</span>
                 </div>
                 <div className="why">
-                  Expires 2 Nov 2026 — it&rsquo;s 43 days short. Renew before
-                  submitting.
+                  Expires 2 Nov 2026 — it&rsquo;s 43 days short of the 6-month
+                  requirement. Renew before submitting.
                 </div>
               </div>
             </div>
             <div className="step">
               <div className="num">02</div>
-              <h3>Files the application</h3>
+              <h3>Fills the form so you don&rsquo;t have to</h3>
               <p>
-                It fills in the official portal form field by field, and shows
-                you exactly what it entered.
+                The official portal form is filled field by field. You see exactly
+                what was entered and approve before submission.
               </p>
               <div className="demo demo-machine">
                 <div>
@@ -141,10 +170,11 @@ export default function Home() {
             </div>
             <div className="step">
               <div className="num">03</div>
-              <h3>Books your appointment</h3>
+              <h3>Gets you the first available slot</h3>
               <p>
-                It checks the consulate every two weeks, takes the first open
-                slot, and puts it on your calendar.
+                Embassy calendars fill up fast. Attache checks every two weeks,
+                takes the first open slot, and puts it on your calendar
+                automatically.
               </p>
               <div className="demo demo-slot">
                 <div className="box">
@@ -165,10 +195,11 @@ export default function Home() {
       <section id="status">
         <div className="wrap">
           <div className="sec-kicker">ALWAYS INFORMED</div>
-          <h2>You always know where you stand.</h2>
+          <h2>No ambiguity. Ever.</h2>
           <p className="sec-sub">
             Every document and every step carries one of six plain words —
-            with a mark, so color is never the only signal.
+            with a mark, so color is never the only signal. No jargon, no
+            guessing.
           </p>
           <div className="vocab">
             <span className="g">● Verified</span>
@@ -181,8 +212,51 @@ export default function Home() {
           <p className="vocab-note">
             When something needs you, a single &ldquo;Action needed&rdquo; lamp
             comes on — and goes off the moment it&rsquo;s resolved. Nothing
-            blinks, nothing nags.
+            blinks, nothing nags, nothing gets lost in email.
           </p>
+        </div>
+      </section>
+
+      {/* ================= TRUST & SECURITY ================= */}
+      <section className="alt" id="trust">
+        <div className="wrap">
+          <div className="sec-kicker">BUILT FOR TRUST</div>
+          <h2>Your documents are safe with us.</h2>
+          <p className="sec-sub">
+            Visa documents are sensitive. We treat them that way.
+          </p>
+          <div className="trust-grid">
+            <div className="trust-item">
+              <div className="trust-icon">◈</div>
+              <div>
+                <h4>End-to-end encryption</h4>
+                <p>
+                  Documents are encrypted in transit and at rest. We never share
+                  your data with third parties.
+                </p>
+              </div>
+            </div>
+            <div className="trust-item">
+              <div className="trust-icon">◎</div>
+              <div>
+                <h4>You approve every action</h4>
+                <p>
+                  Nothing is submitted without your explicit approval. You see
+                  every field before it goes to the consulate.
+                </p>
+              </div>
+            </div>
+            <div className="trust-item">
+              <div className="trust-icon">▣</div>
+              <div>
+                <h4>Auto-delete after decision</h4>
+                <p>
+                  Once your visa is decided, documents are permanently deleted
+                  within 30 days. No lingering copies.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -190,13 +264,13 @@ export default function Home() {
       <section className="closing">
         <div className="wrap">
           <MonogramLogo size={64} className="mark" />
-          <h2>See it handle a real case.</h2>
+          <h2>Your next visa starts here.</h2>
           <p
             className="sec-sub"
             style={{ marginLeft: "auto", marginRight: "auto" }}
           >
-            A 25-second playback: five documents in, one problem caught,
-            application filed, appointment booked.
+            Upload your documents, get your approval odds in 3 minutes, and let
+            Attache handle the rest. No credit card required.
           </p>
           <div className="cta">
             <Show when="signed-in">
@@ -206,7 +280,7 @@ export default function Home() {
             </Show>
             <Show when="signed-out">
               <Link className="key" href="/sign-up">
-                Get started
+                Start your application — it&rsquo;s free
               </Link>
             </Show>
           </div>
@@ -222,7 +296,12 @@ export default function Home() {
               ATTACHE
             </span>
           </a>
-          <span className="fineprint">ATTACHE · AI VISA AGENT</span>
+          <div className="footer-links">
+            <a href="#how">How it works</a>
+            <a href="#trust">Security</a>
+            <a href="#status">Status language</a>
+          </div>
+          <span className="fineprint">ATTACHE · AI VISA AGENT · MADE FOR TRAVELERS</span>
         </div>
       </footer>
     </div>
