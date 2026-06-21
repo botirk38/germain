@@ -1,10 +1,10 @@
 "use client";
 
-import type { GermainCase } from "@/lib/germain-types";
+import type { CaseState } from "@/components/attache/case-types";
 
 // ATC flight strip: applicant + case id + route + travel window.
 // Renders graceful placeholders pre-intake.
-export function CaseStrip({ caseState }: { caseState: GermainCase }) {
+export function CaseStrip({ caseState }: { caseState: CaseState }) {
   // The case id is minted with Date.now() at module load, so the server and
   // client can disagree during hydration.
 

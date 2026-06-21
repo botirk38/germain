@@ -2,7 +2,7 @@
 
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { StatusMark } from "@/components/attache/StatusMark";
-import type { StatusWord } from "@/lib/attache-display";
+import type { StatusWord } from "@/components/attache/display";
 
 interface EmptyStateProps {
   onSuggestion: (text: string) => void;

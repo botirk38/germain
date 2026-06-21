@@ -1,84 +1,90 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import type { EveDynamicToolPart, InputResponse } from "eve/client";
 import { Card, CardHead, CardFoot, ClRow } from "@/components/attache/Card";
-import { StatusMark } from "@/components/attache/StatusMark";
+import { FileUpload } from "@/components/attache/FileUpload";
 import { KeyButton } from "@/components/attache/KeyButton";
 import { MachinePanel } from "@/components/attache/MachinePanel";
-import { SlotBox } from "@/components/attache/SlotBox";
-import { FileUpload } from "@/components/attache/FileUpload";
-import { SingleFileUpload } from "@/components/attache/SingleFileUpload";
-import { reviewStatusWord } from "@/lib/attache-display";
-import type { GermainUIMessage } from "@/lib/agents/germain";
-import type {
-  GermainClientToolName,
-  GermainClientToolResult,
-} from "@/lib/tools";
+import { StatusMark } from "@/components/attache/StatusMark";
 
-type MessagePart = NonNullable<GermainUIMessage["parts"]>[number];
-type ToolState =
-  | "input-streaming"
-  | "input-available"
-  | "approval-requested"
-  | "approval-responded"
-  | "output-available"
-  | "output-error"
-  | "output-denied";
-type ToolPart<T extends string> = Extract<MessagePart, { type: `tool-${T}` }> & {
-  state: ToolState;
-  toolCallId: string;
-  input?: unknown;
-  output?: unknown;
-  errorText?: string;
+type UploadedDocument = {
+  readonly id: string;
+  readonly type: string;
+  readonly name: string;
+  readonly status: "uploaded";
 };
+
+type DynamicToolPartProps = {
+  readonly part: EveDynamicToolPart;
+  readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
+  readonly onInputResponse: (response: InputResponse) => void;
+};
+
+type JsonRecord = Record<string, unknown>;
 
 const toolHeaders: Record<string, string> = {
-  evaluateCase: "CASE EVALUATION",
-  uploadDocuments: "UPLOAD REQUIRED",
-  uploadDocument: "UPLOAD DOCUMENT",
-  reviewAndPrepare: "REVIEW & PREPARE",
-  runRiskReview: "RISK REVIEW",
-  submitApplication: "SUBMIT APPLICATION",
-  approveSubmission: "APPROVE SUBMISSION",
-  monitorCase: "CASE MONITOR",
+  prepare_submission: "PREPARE SUBMISSION",
+  record_documents: "DOCUMENTS RECEIVED",
+  request_documents: "UPLOAD REQUIRED",
+  save_profile: "PROFILE SAVED",
+  submit_application: "SUBMIT APPLICATION",
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function stringArrayField(input: unknown, key: string): string[] {
-  const value = isRecord(input) ? input[key] : undefined;
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+function recordField(value: JsonRecord, key: string): JsonRecord | undefined {
+  const field = value[key];
+  return isRecord(field) ? field : undefined;
 }
 
-function numberField(input: Record<string, unknown>, key: string, fallback: number): number {
-  const value = input[key];
-  return typeof value === "number" ? value : fallback;
+function stringField(value: JsonRecord, key: string, fallback = ""): string {
+  const field = value[key];
+  return typeof field === "string" ? field : fallback;
 }
 
-function skippedMessage(toolName: GermainClientToolName) {
-  const label = toolHeaders[toolName] ?? toolName;
-  return `User skipped ${label}. Continue without this result if possible, and explain any visa approval risk.`;
+function numberField(value: JsonRecord, key: string, fallback = 0): number {
+  const field = value[key];
+  return typeof field === "number" ? field : fallback;
 }
 
-// Working state: telex card with blinking cursor
-function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
+function booleanField(value: JsonRecord, key: string): boolean {
+  return value[key] === true;
+}
+
+function stringArrayField(value: JsonRecord, key: string): string[] {
+  const field = value[key];
+  return Array.isArray(field) ? field.filter((item): item is string => typeof item === "string") : [];
+}
+
+function objectArrayField(value: JsonRecord, key: string): JsonRecord[] {
+  const field = value[key];
+  return Array.isArray(field) ? field.filter(isRecord) : [];
+}
+
+function headerFor(toolName: string): string {
+  return toolHeaders[toolName] ?? toolName.replace(/_/g, " ").toUpperCase();
+}
+
+function outputRecord(output: unknown): JsonRecord {
+  return isRecord(output) ? output : { value: output };
+}
+
+function WorkingCard({ header, dashed }: { readonly header: string; readonly dashed?: boolean }) {
   return (
-    <article
-      className="card"
-      style={dashed ? { borderStyle: "dashed" } : undefined}
-    >
+    <article className="card" style={dashed ? { borderStyle: "dashed" } : undefined}>
       <div className="typing" style={{ padding: "4px 14px" }}>
         <span className="t">
-          {header} — WORKING…<span className="cursor">▌</span>
+          {header} - WORKING<span className="cursor">▌</span>
         </span>
       </div>
     </article>
   );
 }
 
-function SageLine({ children }: { children: ReactNode }) {
+function SageLine({ children }: { readonly children: ReactNode }) {
   return (
     <div
       className="mono"
@@ -95,436 +101,160 @@ function SageLine({ children }: { children: ReactNode }) {
   );
 }
 
-function ToolSkippedCard({ header, errorText }: { header: string; errorText?: string }) {
+function ToolSkippedCard({ header, errorText }: { readonly header: string; readonly errorText?: string }) {
   return (
     <article className="card">
       <CardHead>{header}</CardHead>
       <div className="notam-body">
         <StatusMark word="check" />
         <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-          {errorText ?? "Skipped by user. Attache will continue with reduced confidence where possible."}
+          {errorText ?? "The user did not approve this action. Attache will continue without executing it."}
         </div>
       </div>
     </article>
   );
 }
 
-function SkipToolAction({
-  toolName,
-  toolCallId,
-  disabled,
-  onOutput,
-}: {
-  toolName: GermainClientToolName;
-  toolCallId: string;
-  disabled: boolean;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="btn"
-      style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--ink2)" }}
-      disabled={disabled}
-      onClick={() => {
-        onOutput({
-          kind: "error",
-          tool: toolName,
-          toolCallId,
-          errorText: skippedMessage(toolName),
-        });
-      }}
-    >
-      SKIP
-    </button>
-  );
-}
-
-function ToolStateCard<T extends string>({
+function ApprovalCard({
   part,
-  toolName,
-  children,
+  onInputResponse,
 }: {
-  part: ToolPart<T>;
-  toolName: T;
-  children: (output: Record<string, unknown>) => ReactNode;
+  readonly part: EveDynamicToolPart & { readonly state: "approval-requested" };
+  readonly onInputResponse: (response: InputResponse) => void;
 }) {
-  const header = toolHeaders[toolName] ?? toolName.toUpperCase();
+  const request = part.toolMetadata?.eve?.inputRequest;
+  const approveOption = request?.options?.find((option) => option.id === "approve") ?? request?.options?.[0];
+  const denyOption = request?.options?.find((option) => option.id === "deny") ?? request?.options?.[1];
 
-  if (part.state === "input-streaming") {
-    return <WorkingCard header={header} dashed />;
+  if (!request) {
+    return <WorkingCard header={headerFor(part.toolName)} />;
   }
 
-  if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolSkippedCard header={header} errorText={"errorText" in part ? part.errorText : undefined} />;
+  return (
+    <Card className="notam">
+      <CardHead>{headerFor(part.toolName)}</CardHead>
+      <div className="cl">
+        <div className="poll-detail" style={{ color: "var(--amber)", marginBottom: 8 }}>
+          {request.prompt}
+        </div>
+        <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
+          {approveOption ? (
+            <KeyButton
+              onClick={() => onInputResponse({ requestId: request.requestId, optionId: approveOption.id })}
+            >
+              {approveOption.label.toUpperCase()}
+            </KeyButton>
+          ) : null}
+          {denyOption ? (
+            <button
+              type="button"
+              className="btn"
+              style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
+              onClick={() => onInputResponse({ requestId: request.requestId, optionId: denyOption.id })}
+            >
+              {denyOption.label.toUpperCase()}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function RequestDocumentsOutput({
+  output,
+  onDocuments,
+}: {
+  readonly output: JsonRecord;
+  readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
+}) {
+  const requestedTypes = stringArrayField(output, "requested_types");
+  const caseState = recordField(output, "case_state");
+  const documents = objectArrayField(caseState ?? {}, "documents");
+  const pendingTypes = requestedTypes.length > 0
+    ? requestedTypes
+    : documents
+        .filter((document) => stringField(document, "status") === "requested")
+        .map((document) => stringField(document, "type"))
+        .filter(Boolean);
+
+  if (pendingTypes.length === 0) {
+    return (
+      <Card>
+        <CardHead>UPLOAD REQUIRED</CardHead>
+        <div className="notam-body">No new document slots were added.</div>
+      </Card>
+    );
   }
 
-  if (part.state === "output-available" && part.output) {
-    return children(isRecord(part.output) ? part.output : { value: part.output });
-  }
-
-  return <WorkingCard header={header} />;
-}
-
-// ==================== SERVER TOOL PARTS ====================
-
-export function EvaluateCaseToolPart({ part }: { part: ToolPart<"evaluateCase"> }) {
-  return <ToolStateCard part={part} toolName="evaluateCase">{(output) => <ServerToolOutput toolName="evaluateCase" output={output} />}</ToolStateCard>;
-}
-
-export function ReviewAndPrepareToolPart({ part }: { part: ToolPart<"reviewAndPrepare"> }) {
-  return <ToolStateCard part={part} toolName="reviewAndPrepare">{(output) => <ServerToolOutput toolName="reviewAndPrepare" output={output} />}</ToolStateCard>;
-}
-
-export function RunRiskReviewToolPart({ part }: { part: ToolPart<"runRiskReview"> }) {
-  return <ToolStateCard part={part} toolName="runRiskReview">{(output) => <ServerToolOutput toolName="runRiskReview" output={output} />}</ToolStateCard>;
-}
-
-export function MonitorCaseToolPart({ part }: { part: ToolPart<"monitorCase"> }) {
-  return <ToolStateCard part={part} toolName="monitorCase">{(output) => <ServerToolOutput toolName="monitorCase" output={output} />}</ToolStateCard>;
-}
-
-
-// ==================== CLIENT-INTERACTION TOOL PARTS ====================
-
-export function UploadDocumentsToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"uploadDocuments">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
   return (
-    <ClientToolPart
-      part={part}
-      toolName="uploadDocuments"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="uploadDocuments" output={output} />}
+    <FileUpload
+      requiredTypes={pendingTypes}
+      criticalDocuments={pendingTypes.slice(0, 3)}
+      isSubmitting={false}
+      onUpload={onDocuments}
     />
   );
 }
-
-export function UploadDocumentToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"uploadDocument">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="uploadDocument"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="uploadDocument" output={output} />}
-    />
-  );
-}
-
-export function SubmitApplicationToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"submitApplication">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="submitApplication"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="submitApplication" output={output} />}
-    />
-  );
-}
-
-export function ApproveSubmissionToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"approveSubmission">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="approveSubmission"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="approveSubmission" output={output} />}
-    />
-  );
-}
-
-// ==================== SERVER TOOL OUTPUT DISPLAY ====================
 
 function ServerToolOutput({
   toolName,
   output,
+  onDocuments,
 }: {
-  toolName: string;
-  output: Record<string, unknown>;
+  readonly toolName: string;
+  readonly output: JsonRecord;
+  readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
 }) {
   switch (toolName) {
+    case "request_documents":
+      return <RequestDocumentsOutput output={output} onDocuments={onDocuments} />;
 
-    case "evaluateCase": {
-      const requiredDocuments = (output.requiredDocuments as Array<{
-        type: string; description: string; critical: boolean;
-      }>) ?? [];
-      const fees = (output.fees as Record<string, number>) ?? {};
+    case "record_documents": {
+      const recorded = stringArrayField(output, "recorded");
       return (
         <Card>
-          <CardHead>CASE EVALUATION</CardHead>
+          <CardHead>DOCUMENTS RECEIVED</CardHead>
           <div className="cl">
-            <ClRow
-              label="Eligible"
-              state={<StatusMark word={output.eligible ? "verified" : "problem"} />}
-            />
-            <ClRow label="Visa type" state={output.visaType as string} />
-            <ClRow label="Consulate" state={output.consulate as string} />
-            <ClRow label="Processing" state={output.processingTime as string} />
-            <ClRow
-              label="Base odds"
-              state={`${output.baseLikelihood as number}%`}
-            />
-            <ClRow label="Fee" state={`€${fees.total ?? 0}`} />
-            <div className="poll-detail" style={{ paddingTop: 4 }}>
-              {output.reasoning as string}
-            </div>
-            <div style={{ paddingTop: 8 }}>
-              <ClRow label="Required documents" state={`${requiredDocuments.length}`} />
-              <ClRow label="Critical" state={`${requiredDocuments.filter((d) => d.critical).length}`} critical />
-            </div>
+            <SageLine>○ {recorded.length} DOCUMENTS RECORDED</SageLine>
           </div>
         </Card>
       );
     }
 
-    case "reviewAndPrepare": {
-      const docReviews = (output.documentReviews as Array<{
-        type: string;
-        status: string;
-        extractedFields: Record<string, string>;
-        issues: Array<{ severity: string; message: string; impact: number }>;
-      }>) ?? [];
-      const formData = (output.formData as Record<string, string>) ?? {};
-      const consistency = output.consistencyCheck as { passed: boolean; mismatches: string[] } | undefined;
-      const recommendations = (output.recommendations as Array<{
-        id?: string; issue: string; fix: string; impact: number;
-      }>) ?? [];
-
-      // Build machine lines from form data
-      const formLines = Object.entries(formData).slice(0, 8).map(
-        ([field, value]) => `${field.toUpperCase()}: ${value || "—"} ✓`
-      );
-      if (consistency) {
-        formLines.push(consistency.passed ? "CONSISTENCY CHECK: PASS" : `✕ MISMATCHES: ${consistency.mismatches.length}`);
-      }
-
+    case "prepare_submission":
       return (
-        <>
-          <Card>
-            <CardHead>DOCUMENT REVIEW</CardHead>
-            <div className="cl">
-              {docReviews.map((review) => (
-                <div key={review.type}>
-                  <ClRow
-                    label={review.type.replace(/_/g, " ").toUpperCase()}
-                    state={<StatusMark word={reviewStatusWord(review.status as "verified" | "needs_review" | "rejected")} />}
-                  />
-                  {review.issues.map((issue, j) => (
-                    <div
-                      key={`${review.type}-issue-${j}`}
-                      className={issue.severity === "critical" ? "poll-detail bad" : "poll-detail"}
-                      style={issue.severity === "warning" ? { color: "var(--amber)" } : undefined}
-                    >
-                      {issue.severity === "critical" ? "✕ " : issue.severity === "warning" ? "▲ " : ""}
-                      {issue.message}
-                    </div>
-                  ))}
-                </div>
-              ))}
-              {recommendations.map((rec, i) => (
-                <div key={rec.id ?? `rec-${i}`} className="poll-detail">
-                  <span style={{ color: "var(--amber)" }}>▲ Check this</span> — {rec.fix}{" "}
-                  <span className="mono" style={{ color: "var(--sage)" }}>+{rec.impact}%</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card>
-            <MachinePanel
-              lines={formLines}
-              final={`FORM COMPLETE — ODDS ${output.approvalLikelihood as number}%`}
-            />
-          </Card>
-          <Card>
-            <CardHead>SUPPORTING PACK</CardHead>
-            <div className="cl">
-              <ClRow label="Cover letter" state={<StatusMark word="verified" />} />
-              <ClRow label="Itinerary" state={<StatusMark word="verified" />} />
-              <ClRow label="Proof of ties" state={<StatusMark word="verified" />} />
-            </div>
-          </Card>
-        </>
-      );
-    }
-
-    case "runRiskReview": {
-      const finalRecommendations = (output.finalRecommendations as Array<{
-        id?: string; issue: string; fix: string; impact: number;
-      }>) ?? [];
-      return (
-        <Card>
-          <CardHead>RISK REVIEW</CardHead>
+        <Card className="notam">
+          <CardHead>PREPARE SUBMISSION</CardHead>
           <div className="cl">
-            <ClRow
-              label="Risk score"
-              state={`${(output.riskScore as number) ?? 0}/100`}
-            />
-            <ClRow
-              label="Approval likelihood"
-              state={`${output.approvalLikelihood as number}%`}
-            />
-            <ClRow
-              label="Ready to file"
-              state={<StatusMark word={output.readyToSubmit ? "verified" : "check"} />}
-            />
-            {finalRecommendations.map((rec, i) => (
-              <div
-                key={rec.id ?? `final-${i}`}
-                className="poll-detail"
-                style={{ color: "var(--amber)" }}
-              >
-                ▲ {rec.issue} — {rec.fix} (+{rec.impact}%)
-              </div>
+            <ClRow label="Live review" state={stringField(output, "live_view_url", "Unavailable")} />
+            <ClRow label="Fields filled" state={`${numberField(output, "form_fields_filled", 0)}`} />
+            <ClRow label="Status" state={stringField(output, "status", "pending").toUpperCase()} />
+            {stringArrayField(output, "errors").map((error, index) => (
+              <div key={index} className="poll-detail bad">{error}</div>
             ))}
           </div>
-        </Card>
-      );
-    }
-
-    case "monitorCase": {
-      const emails = (output.emails as Array<{ subject: string; from: string; date: string; snippet: string }>) ?? [];
-      const rfeDetails = output.rfeDetails as { missingItem: string; explanation: string; deadline?: string } | undefined;
-      const decision = output.decision as { outcome: string; validityPeriod?: string; entries?: string } | undefined;
-      const actionNeeded = Boolean(output.actionRequired);
-
-      if (decision) {
-        if (decision.outcome === "approved") {
-          return (
-            <SlotBox title="● APPROVED">
-              {decision.validityPeriod ? <div>Valid {decision.validityPeriod}</div> : null}
-              {decision.entries ? <div style={{ fontWeight: 400 }}>Entries: {decision.entries}</div> : null}
-              <div style={{ marginTop: 6, fontWeight: 400, fontSize: 11.5, lineHeight: 1.5, color: "var(--ink2)" }}>
-                {output.summary as string}
-              </div>
-            </SlotBox>
-          );
-        }
-        return (
-          <Card>
-            <CardHead>DECISION</CardHead>
-            <div className="notam-body">
-              <StatusMark word={decision.outcome === "refused" ? "problem" : "check"} />
-              <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-                {output.summary as string}
-              </div>
-            </div>
-          </Card>
-        );
-      }
-
-      if (actionNeeded && rfeDetails) {
-        return (
-          <Card className="notam">
-            <CardHead>CASE MONITOR — ACTION NEEDED</CardHead>
-            <div className="notam-body">
-              <strong>{rfeDetails.missingItem}</strong>
-              <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-                {rfeDetails.explanation}
-              </div>
-            </div>
-            {rfeDetails.deadline ? <CardFoot>RESPOND BY {rfeDetails.deadline}</CardFoot> : null}
-          </Card>
-        );
-      }
-
-      return (
-        <Card>
-          <CardHead>CASE MONITOR</CardHead>
-          <div className="notam-body">
-            <span className="mono" style={{ fontSize: 9.5, letterSpacing: "0.16em", color: "var(--ink2)" }}>
-              {String(output.status ?? "").replace(/_/g, " ").toUpperCase()}
-            </span>
-            <div style={{ marginTop: 4 }}>{output.summary as string}</div>
-            {emails.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                {emails.map((email, i) => (
-                  <div key={i} className="poll-detail" style={{ fontSize: 11 }}>
-                    {email.date} — {email.subject}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-      );
-    }
-
-    case "uploadDocuments":
-      return (
-        <Card>
-          <CardHead>UPLOAD REQUIRED</CardHead>
-          <div className="cl">
-            <SageLine>
-              ○ {(output.uploadedCount as number) ?? 0} DOCUMENTS RECEIVED
-            </SageLine>
-          </div>
+          {stringField(output, "live_view_url") ? <CardFoot>REVIEW BEFORE APPROVING SUBMISSION</CardFoot> : null}
         </Card>
       );
 
-    case "uploadDocument": {
-      const doc = output.document as { type?: string } | undefined;
-      const docType = doc?.type ?? "document";
-      return (
-        <Card>
-          <CardHead>DOCUMENT RECEIVED</CardHead>
-          <div className="cl">
-            <SageLine>
-              ● {docType.replace(/_/g, " ").toUpperCase()} UPLOADED
-            </SageLine>
-          </div>
-        </Card>
-      );
-    }
-
-    case "submitApplication":
+    case "submit_application":
       return (
         <Card>
           <MachinePanel
-            lines={[
-              output.referenceNumber ? `REF: ${output.referenceNumber as string}` : `SESSION: ${output.sessionId as string}`,
-              `STATUS: ${String(output.status ?? "").toUpperCase()}`,
-            ]}
+            lines={[`REF: ${stringField(output, "reference_number", "pending")}`, `STATUS: ${booleanField(output, "submitted") ? "SUBMITTED" : "PENDING"}`]}
             final="APPLICATION SUBMITTED"
             showRunway
           />
         </Card>
       );
 
-    case "approveSubmission":
+    case "save_profile":
       return (
         <Card>
-          <CardHead>SUBMISSION</CardHead>
+          <CardHead>{headerFor(toolName)}</CardHead>
           <div className="cl">
-            <SageLine>
-              {output.approved ? "● APPROVED BY USER" : "✕ REJECTED BY USER"}
-            </SageLine>
-            {output.userNote ? (
-              <div className="poll-detail" style={{ color: "var(--ink2)" }}>
-                {output.userNote as string}
-              </div>
-            ) : null}
+            <ClRow label="Profile" state={<StatusMark word="verified" />} />
           </div>
         </Card>
       );
@@ -532,7 +262,7 @@ function ServerToolOutput({
     default:
       return (
         <Card>
-          <CardHead>{toolHeaders[toolName] ?? toolName.toUpperCase()}</CardHead>
+          <CardHead>{headerFor(toolName)}</CardHead>
           <div className="cl">
             <ClRow label="Result" state={<StatusMark word="received" />} />
           </div>
@@ -541,262 +271,22 @@ function ServerToolOutput({
   }
 }
 
-// ==================== CLIENT TOOL INTERACTION ====================
+export function DynamicToolPart({ part, onDocuments, onInputResponse }: DynamicToolPartProps) {
+  const header = headerFor(part.toolName);
 
-function ClientToolPart<T extends GermainClientToolName>({
-  part,
-  toolName,
-  onOutput,
-  renderOutput,
-}: {
-  part: ToolPart<T>;
-  toolName: T;
-  onOutput: (result: GermainClientToolResult) => void;
-  renderOutput: (output: Record<string, unknown>) => ReactNode;
-}) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const header = toolHeaders[toolName] ?? toolName.toUpperCase();
-  const input = part.input;
-
-  if (part.state === "input-streaming") {
-    return <WorkingCard header={header} dashed />;
-  }
-
-  if (part.state === "output-error" || part.state === "output-denied") {
-    return <ToolSkippedCard header={header} errorText={part.errorText} />;
-  }
-
-  if (part.state === "output-available" && part.output) {
-    return renderOutput(isRecord(part.output) ? part.output : { value: part.output });
-  }
-
-  const handleAction = () => {
-    setIsSubmitting(true);
-
-    switch (toolName) {
-      case "uploadDocuments": {
-        const requiredTypes = stringArrayField(input, "requiredTypes");
-        onOutput({
-          kind: "output",
-          tool: "uploadDocuments", toolCallId: part.toolCallId,
-          output: {
-            success: true,
-            uploadedCount: requiredTypes.length || 3,
-            documents: requiredTypes.map((type, i) => ({
-              id: `doc-${i}`, type, name: `${type.replace("_", " ")}.pdf`, status: "uploaded" as const,
-            })),
-          },
-        });
-        break;
-      }
-      case "uploadDocument": {
-        const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
-        onOutput({
-          kind: "output",
-          tool: "uploadDocument", toolCallId: part.toolCallId,
-          output: {
-            uploaded: true,
-            document: {
-              id: `doc-${docType}-${Date.now()}`,
-              type: docType,
-              name: `${docType.replace(/_/g, " ")}.pdf`,
-              status: "uploaded" as const,
-            },
-          },
-        });
-        break;
-      }
-      case "submitApplication":
-        onOutput({
-          kind: "output",
-          tool: "submitApplication", toolCallId: part.toolCallId,
-          output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
-        });
-        break;
-      case "approveSubmission":
-        onOutput({
-          kind: "output",
-          tool: "approveSubmission", toolCallId: part.toolCallId,
-          output: { approved: true },
-        });
-        break;
-    }
-    setIsSubmitting(false);
-  };
-
-  switch (toolName) {
-    case "uploadDocuments": {
-      const requiredTypes = stringArrayField(input, "requiredTypes");
-      const criticalDocuments = stringArrayField(input, "criticalDocuments");
-      return (
-        <>
-          <FileUpload
-            requiredTypes={requiredTypes}
-            criticalDocuments={criticalDocuments}
-            isSubmitting={isSubmitting}
-            onUpload={(documents) => {
-              setIsSubmitting(true);
-              onOutput({
-                kind: "output",
-                tool: "uploadDocuments",
-                toolCallId: part.toolCallId,
-                output: {
-                  success: true,
-                  uploadedCount: documents.length,
-                  documents,
-                },
-              });
-              setIsSubmitting(false);
-            }}
-          />
-          <div style={{ maxWidth: 680, margin: "8px auto 0", display: "flex", justifyContent: "flex-end" }}>
-            <SkipToolAction
-              toolName="uploadDocuments"
-              toolCallId={part.toolCallId}
-              disabled={isSubmitting}
-              onOutput={onOutput}
-            />
-          </div>
-        </>
-      );
-    }
-
-    case "uploadDocument": {
-      const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
-      const reason = isRecord(input) ? (input.reason as string) ?? "" : "";
-      const guidanceText = isRecord(input) ? (input.guidance as string) ?? "" : "";
-      const isCritical = isRecord(input) ? Boolean(input.critical) : false;
-      return (
-        <>
-          <SingleFileUpload
-            documentType={docType}
-            reason={reason}
-            guidance={guidanceText}
-            critical={isCritical}
-            isSubmitting={isSubmitting}
-            onUpload={(document) => {
-              setIsSubmitting(true);
-              onOutput({
-                kind: "output",
-                tool: "uploadDocument",
-                toolCallId: part.toolCallId,
-                output: {
-                  uploaded: true,
-                  document,
-                },
-              });
-              setIsSubmitting(false);
-            }}
-          />
-          <div style={{ maxWidth: 680, margin: "8px auto 0", display: "flex", justifyContent: "flex-end" }}>
-            <SkipToolAction
-              toolName="uploadDocument"
-              toolCallId={part.toolCallId}
-              disabled={isSubmitting}
-              onOutput={onOutput}
-            />
-          </div>
-        </>
-      );
-    }
-
-    case "submitApplication": {
-      const formData = isRecord(input) ? (input.formData as Record<string, string>) : {};
-      const formLines = formData
-        ? Object.entries(formData).slice(0, 6).map(([k, v]) => `${k}: ${v}`)
-        : [];
-      return (
-        <Card className="notam">
-          <CardHead>SUBMIT APPLICATION</CardHead>
-          <div className="cl">
-            {formLines.map((line, i) => (
-              <div key={i} className="poll-detail" style={{ fontSize: 11 }}>{line}</div>
-            ))}
-            <div className="poll-detail" style={{ color: "var(--amber)", marginTop: 8 }}>
-              ▲ This will open a browser session to fill the consulate portal.
-              You will see the agent work in real time.
-            </div>
-            <div style={{ display: "flex", gap: 8, paddingTop: 8 }}>
-              <KeyButton
-                onClick={handleAction}
-                disabled={isSubmitting}
-                submittingLabel="LAUNCHING BROWSER…"
-              >
-                START SUBMISSION
-              </KeyButton>
-              <SkipToolAction
-                toolName="submitApplication"
-                toolCallId={part.toolCallId}
-                disabled={isSubmitting}
-                onOutput={onOutput}
-              />
-            </div>
-          </div>
-        </Card>
-      );
-    }
-
-    case "approveSubmission": {
-      const formSummary = isRecord(input) ? (input.formSummary as Record<string, string>) : {};
-      const totalFees = isRecord(input) ? numberField(input, "totalFees", 0) : 0;
-      return (
-        <Card className="notam">
-          <CardHead>APPROVE SUBMISSION</CardHead>
-          <div className="cl">
-            {formSummary && Object.entries(formSummary).map(([k, v], i) => (
-              <ClRow key={i} label={k.replace(/_/g, " ").toUpperCase()} state={v} />
-            ))}
-            <ClRow label="Total fees" state={`€${totalFees}`} />
-            <div className="poll-detail" style={{ color: "var(--amber)", marginTop: 8 }}>
-              ▲ Review the form in the browser panel. Once you approve,
-              the application will be submitted.
-            </div>
-            <div style={{ display: "flex", gap: 8, paddingTop: 10 }}>
-              <KeyButton
-                onClick={() => {
-                  setIsSubmitting(true);
-                  onOutput({
-                    kind: "output",
-                    tool: "approveSubmission",
-                    toolCallId: part.toolCallId,
-                    output: { approved: true },
-                  });
-                  setIsSubmitting(false);
-                }}
-                disabled={isSubmitting}
-                submittingLabel="SUBMITTING…"
-              >
-                APPROVE & SUBMIT
-              </KeyButton>
-              <button
-                type="button"
-                className="btn"
-                style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
-                onClick={() => {
-                  onOutput({
-                    kind: "output",
-                    tool: "approveSubmission",
-                    toolCallId: part.toolCallId,
-                    output: { approved: false, userNote: "User rejected the submission" },
-                  });
-                }}
-                disabled={isSubmitting}
-              >
-                CANCEL
-              </button>
-              <SkipToolAction
-                toolName="approveSubmission"
-                toolCallId={part.toolCallId}
-                disabled={isSubmitting}
-                onOutput={onOutput}
-              />
-            </div>
-          </div>
-        </Card>
-      );
-    }
-
-    default:
-      return null;
+  switch (part.state) {
+    case "input-streaming":
+    case "input-available":
+      return <WorkingCard header={header} dashed={part.state === "input-streaming"} />;
+    case "approval-requested":
+      return <ApprovalCard part={part} onInputResponse={onInputResponse} />;
+    case "approval-responded":
+      return <WorkingCard header={header} />;
+    case "output-error":
+      return <ToolSkippedCard header={header} errorText={part.errorText} />;
+    case "output-denied":
+      return <ToolSkippedCard header={header} errorText={part.approval.reason} />;
+    case "output-available":
+      return <ServerToolOutput toolName={part.toolName} output={outputRecord(part.output)} onDocuments={onDocuments} />;
   }
 }

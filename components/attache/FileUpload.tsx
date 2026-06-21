@@ -5,10 +5,9 @@ import { Card, CardHead } from "@/components/attache/Card";
 import { StatusMark } from "@/components/attache/StatusMark";
 import { KeyButton } from "@/components/attache/KeyButton";
 
-// Real document uploader for the uploadDocuments client tool. The user attaches
-// actual files (passport.png, bank.pdf, …); we match each by filename to a
-// required document type, or they attach per-slot. No bytes leave the browser —
-// the mock backend only needs the filename + type to advance the case.
+// Document metadata uploader for Eve document-request flows. The user attaches
+// files locally; the UI matches filenames to requested slots and sends filename
+// metadata back to the agent so it can persist document state.
 
 const TYPE_LABEL = (t: string) => t.replace(/_/g, " ").toUpperCase();
 

@@ -3,7 +3,7 @@ import {
   STATUS_WORD_META,
   type StatusTone,
   type StatusWord,
-} from "@/lib/attache-display";
+} from "@/components/attache/display";
 
 // Single source of truth for rendering the status vocabulary:
 // mark + word, never color alone.
