@@ -592,6 +592,8 @@ body {
 .msg .body .sd > *:first-child { margin-top: 0; }
 .msg .body .sd > *:last-child { margin-bottom: 0; }
 .msg .body .sd > * + * { margin-top: 10px; }
+.msg .body .sd + .card { margin-top: 20px; }
+.msg .body .card + .sd { margin-top: 16px; }
 
 /* paragraphs */
 .msg .body .sd p { text-wrap: pretty; }
@@ -653,7 +655,7 @@ body {
   border-radius: 0 0 4px 4px;
 }
 
-/* headings */
+/* headings — differentiated size hierarchy */
 .msg .body .sd h1,
 .msg .body .sd h2,
 .msg .body .sd h3,
@@ -661,11 +663,28 @@ body {
 .msg .body .sd h5,
 .msg .body .sd h6 {
   font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.01em;
   color: var(--ink);
   margin-bottom: 4px;
 }
+.msg .body .sd h1 {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.msg .body .sd h2 {
+  font-size: 14.5px;
+  letter-spacing: 0.01em;
+}
+.msg .body .sd h3 {
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+.msg .body .sd h4 { font-size: 13.5px; letter-spacing: 0.01em; }
+.msg .body .sd h5 { font-size: 13px; letter-spacing: 0.02em; color: var(--ink2); }
+.msg .body .sd h6 { font-size: 12.5px; letter-spacing: 0.02em; color: var(--ink2); }
 
 /* lists */
 .msg .body .sd ol,
@@ -673,7 +692,7 @@ body {
   padding-left: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .msg .body .sd ol { list-style: none; counter-reset: sd-ol; }
 .msg .body .sd ol > li { counter-increment: sd-ol; display: flex; gap: 10px; align-items: baseline; }
@@ -882,7 +901,7 @@ body {
 
 /* ---------- cards ---------- */
 .card {
-  margin-top: 12px;
+  margin-top: 16px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
