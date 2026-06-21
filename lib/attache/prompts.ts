@@ -1,4 +1,4 @@
-export const germainSystemPrompt = `
+export const attacheSystemPrompt = `
 You are Attache, an AI visa concierge. Your mission is to maximize the applicant's visa approval likelihood through strategic guidance, document optimization, and proactive risk mitigation.
 
 ## Core Principles
@@ -76,7 +76,7 @@ You are Attache, an AI visa concierge. Your mission is to maximize the applicant
 Current case state and approval likelihood are provided in each request context.
 `;
 
-export const germainUserPrompt = (caseState: Record<string, unknown>) => `
+export const attacheUserPrompt = (caseState: Record<string, unknown>) => `
 Current case state (JSON):
 ${JSON.stringify(caseState, null, 2)}
 

@@ -2,10 +2,10 @@
 
 import { useChat, Chat } from "@ai-sdk/react";
 import { lastAssistantMessageIsCompleteWithToolCalls, DefaultChatTransport } from "ai";
-import type { GermainUIMessage } from "@/lib/agents/germain";
-import type { GermainClientToolResult } from "@/lib/tools";
-import { deriveCase, initialCaseState } from "@/lib/case-derive";
-import { getDisplayStepIndex, deriveActionNeeded } from "@/lib/attache-display";
+import type { AttacheUIMessage } from "@/lib/attache/agent";
+import type { AttacheClientToolResult } from "@/lib/tools";
+import { deriveCase, initialCaseState } from "@/lib/attache/case";
+import { getDisplayStepIndex, deriveActionNeeded } from "@/lib/attache/display";
 import { ChatMessages } from "@/components/ChatMessages";
 import { EmptyState } from "@/components/EmptyState";
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
@@ -17,18 +17,16 @@ import { SplitFlap } from "@/components/console/SplitFlap";
 import { CautionLamp } from "@/components/console/CautionLamp";
 import { useState, type FormEvent, type ChangeEvent, type KeyboardEvent, useMemo } from "react";
 
-// Create transport singleton
-const chatTransport = new DefaultChatTransport<GermainUIMessage>({
+const chatTransport = new DefaultChatTransport<AttacheUIMessage>({
   api: "/api/chat",
 });
 
-// Create chat instance
-const germainChat = new Chat<GermainUIMessage>({
+const attacheChat = new Chat<AttacheUIMessage>({
   transport: chatTransport,
   sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 });
 
-export default function GermainPage() {
+export default function AttachePage() {
   const [input, setInput] = useState("");
 
   const {
@@ -38,14 +36,12 @@ export default function GermainPage() {
     sendMessage,
     regenerate,
     addToolOutput,
-  } = useChat<GermainUIMessage>({
-    chat: germainChat,
+  } = useChat<AttacheUIMessage>({
+    chat: attacheChat,
   });
 
-  // "error" must not lock the composer — only an in-flight request does.
   const busy = status === "submitted" || status === "streaming";
 
-  // Derive live case state from message history
   const caseState = useMemo(() => {
     return messages.length > 0 ? deriveCase(messages) : initialCaseState;
   }, [messages]);
@@ -54,7 +50,7 @@ export default function GermainPage() {
   const actionNeeded = useMemo(() => deriveActionNeeded(messages, caseState), [messages, caseState]);
   const hasMessages = messages.length > 0;
 
-  const handleToolOutput = (result: GermainClientToolResult) => {
+  const handleToolOutput = (result: AttacheClientToolResult) => {
     addToolOutput({
       tool: result.tool,
       toolCallId: result.toolCallId,
@@ -63,17 +59,14 @@ export default function GermainPage() {
     });
   };
 
-  // Handle input change
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
 
-  // Handle suggestion click from empty state
   const handleSuggestion = (text: string) => {
     sendMessage({ text });
   };
 
-  // Handle form submission
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || busy) return;
@@ -82,7 +75,6 @@ export default function GermainPage() {
     setInput("");
   };
 
-  // Handle keydown for textarea
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();

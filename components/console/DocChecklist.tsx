@@ -1,8 +1,8 @@
-import type { GermainCase, GermainDocument } from "@/lib/germain-types";
+import type { AttacheCase, AttacheDocument } from "@/lib/attache/case";
 import { StatusMark } from "@/components/attache/StatusMark";
-import { docStatusWord } from "@/lib/attache-display";
+import { docStatusWord } from "@/lib/attache/display";
 
-const DOC_LAMP_STATE: Record<GermainDocument["status"], string> = {
+const DOC_LAMP_STATE: Record<AttacheDocument["status"], string> = {
   missing: "pending",
   uploaded: "received",
   needs_review: "caution",
@@ -11,7 +11,7 @@ const DOC_LAMP_STATE: Record<GermainDocument["status"], string> = {
 };
 
 // Document checklist with status lamps. Status is always mark + word.
-export function DocChecklist({ documents }: { documents: GermainCase["documents"] }) {
+export function DocChecklist({ documents }: { documents: AttacheCase["documents"] }) {
   return (
     <div className="panel">
       <div className="panel-head">

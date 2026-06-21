@@ -1,7 +1,7 @@
-import { GermainCase } from "./germain-types";
+import type { AttacheCase } from "./case";
 
-export const initialCase: GermainCase = {
-  id: "ger_case_001",
+export const initialCase: AttacheCase = {
+  id: "att_case_001",
   visaType: "Schengen Tourist Visa",
   destinationCountry: "France",
   status: "intake",
@@ -25,17 +25,11 @@ export const initialCase: GermainCase = {
   formCompletion: 8,
   embassyFollowUps: [],
   appointments: [],
-  fees: {
-    visaFee: 0,
-    serviceFee: 0,
-    vacFee: 0,
-    total: 0,
-    paid: false,
-  },
+  fees: { visaFee: 0, serviceFee: 0, vacFee: 0, total: 0, paid: false },
   timeline: [
     {
       title: "Case created",
-      description: "Germain started a Schengen Tourist Visa case for France.",
+      description: "Attache started a Schengen Tourist Visa case for France.",
       time: "Now",
     },
   ],

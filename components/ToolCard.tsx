@@ -8,14 +8,20 @@ import { MachinePanel } from "@/components/attache/MachinePanel";
 import { SlotBox } from "@/components/attache/SlotBox";
 import { FileUpload } from "@/components/attache/FileUpload";
 import { SingleFileUpload } from "@/components/attache/SingleFileUpload";
-import { reviewStatusWord } from "@/lib/attache-display";
-import type { GermainUIMessage } from "@/lib/agents/germain";
-import type {
-  GermainClientToolName,
-  GermainClientToolResult,
-} from "@/lib/tools";
+import { reviewStatusWord } from "@/lib/attache/display";
+import type { AttacheUIMessage } from "@/lib/attache/agent";
+import type { AttacheClientToolName, AttacheClientToolResult } from "@/lib/tools";
+import { evaluateCaseOutputSchema, type EvaluateCaseOutput } from "@/lib/tools/evaluate-case";
+import { reviewAndPrepareOutputSchema, type ReviewAndPrepareOutput } from "@/lib/tools/review-and-prepare";
+import { runRiskReviewOutputSchema, type RunRiskReviewOutput } from "@/lib/tools/run-risk-review";
+import { monitorCaseOutputSchema, type MonitorCaseOutput } from "@/lib/tools/monitor-case";
+import { uploadDocumentsOutputSchema, uploadDocumentsInputSchema, type UploadDocumentsInput } from "@/lib/tools/upload-documents";
+import { uploadDocumentOutputSchema, uploadDocumentInputSchema, type UploadDocumentInput } from "@/lib/tools/upload-documents";
+import { submitApplicationOutputSchema, submitApplicationInputSchema, type SubmitApplicationInput } from "@/lib/tools/submit-application";
+import { approveSubmissionOutputSchema, approveSubmissionInputSchema, type ApproveSubmissionInput } from "@/lib/tools/submit-application";
+import { askQuestionInputSchema, askQuestionOutputSchema, type AskQuestionInput, type AskQuestionAnswer } from "@/lib/tools/ask-question";
 
-type MessagePart = NonNullable<GermainUIMessage["parts"]>[number];
+type MessagePart = NonNullable<AttacheUIMessage["parts"]>[number];
 type ToolState =
   | "input-streaming"
   | "input-available"
@@ -44,21 +50,6 @@ const toolHeaders: Record<string, string> = {
   monitorCase: "CASE MONITOR",
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringArrayField(input: unknown, key: string): string[] {
-  const value = isRecord(input) ? input[key] : undefined;
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function numberField(input: Record<string, unknown>, key: string, fallback: number): number {
-  const value = input[key];
-  return typeof value === "number" ? value : fallback;
-}
-
-// Working state: telex card with blinking cursor
 function WorkingCard({ header, dashed }: { header: string; dashed?: boolean }) {
   return (
     <article
@@ -130,7 +121,9 @@ function ToolStateCard<T extends string>({
   }
 
   if (part.state === "output-available" && part.output) {
-    return children(isRecord(part.output) ? part.output : { value: part.output });
+    const raw = part.output;
+    const obj = typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : { value: raw };
+    return children(obj);
   }
 
   return <WorkingCard header={header} />;
@@ -156,89 +149,24 @@ export function MonitorCaseToolPart({ part }: { part: ToolPart<"monitorCase"> })
 
 // ==================== CLIENT-INTERACTION TOOL PARTS ====================
 
-export function UploadDocumentsToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"uploadDocuments">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="uploadDocuments"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="uploadDocuments" output={output} />}
-    />
-  );
+export function UploadDocumentsToolPart({ part, onOutput }: { part: ToolPart<"uploadDocuments">; onOutput: (result: AttacheClientToolResult) => void }) {
+  return <ClientToolPart part={part} toolName="uploadDocuments" onOutput={onOutput} renderOutput={(output) => <ServerToolOutput toolName="uploadDocuments" output={output} />} />;
 }
 
-export function UploadDocumentToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"uploadDocument">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="uploadDocument"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="uploadDocument" output={output} />}
-    />
-  );
+export function UploadDocumentToolPart({ part, onOutput }: { part: ToolPart<"uploadDocument">; onOutput: (result: AttacheClientToolResult) => void }) {
+  return <ClientToolPart part={part} toolName="uploadDocument" onOutput={onOutput} renderOutput={(output) => <ServerToolOutput toolName="uploadDocument" output={output} />} />;
 }
 
-export function SubmitApplicationToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"submitApplication">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="submitApplication"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="submitApplication" output={output} />}
-    />
-  );
+export function SubmitApplicationToolPart({ part, onOutput }: { part: ToolPart<"submitApplication">; onOutput: (result: AttacheClientToolResult) => void }) {
+  return <ClientToolPart part={part} toolName="submitApplication" onOutput={onOutput} renderOutput={(output) => <ServerToolOutput toolName="submitApplication" output={output} />} />;
 }
 
-export function AskQuestionToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"askQuestion">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="askQuestion"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="askQuestion" output={output} />}
-    />
-  );
+export function AskQuestionToolPart({ part, onOutput }: { part: ToolPart<"askQuestion">; onOutput: (result: AttacheClientToolResult) => void }) {
+  return <ClientToolPart part={part} toolName="askQuestion" onOutput={onOutput} renderOutput={(output) => <ServerToolOutput toolName="askQuestion" output={output} />} />;
 }
 
-export function ApproveSubmissionToolPart({
-  part,
-  onOutput,
-}: {
-  part: ToolPart<"approveSubmission">;
-  onOutput: (result: GermainClientToolResult) => void;
-}) {
-  return (
-    <ClientToolPart
-      part={part}
-      toolName="approveSubmission"
-      onOutput={onOutput}
-      renderOutput={(output) => <ServerToolOutput toolName="approveSubmission" output={output} />}
-    />
-  );
+export function ApproveSubmissionToolPart({ part, onOutput }: { part: ToolPart<"approveSubmission">; onOutput: (result: AttacheClientToolResult) => void }) {
+  return <ClientToolPart part={part} toolName="approveSubmission" onOutput={onOutput} renderOutput={(output) => <ServerToolOutput toolName="approveSubmission" output={output} />} />;
 }
 
 // ==================== SERVER TOOL OUTPUT DISPLAY ====================
@@ -253,32 +181,23 @@ function ServerToolOutput({
   switch (toolName) {
 
     case "evaluateCase": {
-      const requiredDocuments = (output.requiredDocuments as Array<{
-        type: string; description: string; critical: boolean;
-      }>) ?? [];
-      const fees = (output.fees as Record<string, number>) ?? {};
+      const parsed = evaluateCaseOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
+      const data: EvaluateCaseOutput = parsed.data;
       return (
         <Card>
           <CardHead>CASE EVALUATION</CardHead>
           <div className="cl">
-            <ClRow
-              label="Eligible"
-              state={<StatusMark word={output.eligible ? "verified" : "problem"} />}
-            />
-            <ClRow label="Visa type" state={output.visaType as string} />
-            <ClRow label="Consulate" state={output.consulate as string} />
-            <ClRow label="Processing" state={output.processingTime as string} />
-            <ClRow
-              label="Base odds"
-              state={`${output.baseLikelihood as number}%`}
-            />
-            <ClRow label="Fee" state={`€${fees.total ?? 0}`} />
-            <div className="poll-detail" style={{ paddingTop: 4 }}>
-              {output.reasoning as string}
-            </div>
+            <ClRow label="Eligible" state={<StatusMark word={data.eligible ? "verified" : "problem"} />} />
+            <ClRow label="Visa type" state={data.visaType} />
+            <ClRow label="Consulate" state={data.consulate} />
+            <ClRow label="Processing" state={data.processingTime} />
+            <ClRow label="Base odds" state={`${data.baseLikelihood}%`} />
+            <ClRow label="Fee" state={`€${data.fees.total}`} />
+            <div className="poll-detail" style={{ paddingTop: 4 }}>{data.reasoning}</div>
             <div style={{ paddingTop: 8 }}>
-              <ClRow label="Required documents" state={`${requiredDocuments.length}`} />
-              <ClRow label="Critical" state={`${requiredDocuments.filter((d) => d.critical).length}`} critical />
+              <ClRow label="Required documents" state={`${data.requiredDocuments.length}`} />
+              <ClRow label="Critical" state={`${data.requiredDocuments.filter((d) => d.critical).length}`} critical />
             </div>
           </div>
         </Card>
@@ -286,36 +205,25 @@ function ServerToolOutput({
     }
 
     case "reviewAndPrepare": {
-      const docReviews = (output.documentReviews as Array<{
-        type: string;
-        status: string;
-        extractedFields: Record<string, string>;
-        issues: Array<{ severity: string; message: string; impact: number }>;
-      }>) ?? [];
-      const formData = (output.formData as Record<string, string>) ?? {};
-      const consistency = output.consistencyCheck as { passed: boolean; mismatches: string[] } | undefined;
-      const recommendations = (output.recommendations as Array<{
-        id?: string; issue: string; fix: string; impact: number;
-      }>) ?? [];
+      const parsed = reviewAndPrepareOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
+      const data: ReviewAndPrepareOutput = parsed.data;
 
-      // Build machine lines from form data
-      const formLines = Object.entries(formData).slice(0, 8).map(
-        ([field, value]) => `${field.toUpperCase()}: ${value || "—"} ✓`
+      const formLines = Object.entries(data.formData).slice(0, 8).map(
+        ([field, value]) => `${field.toUpperCase()}: ${value || "—"} ✓`,
       );
-      if (consistency) {
-        formLines.push(consistency.passed ? "CONSISTENCY CHECK: PASS" : `✕ MISMATCHES: ${consistency.mismatches.length}`);
-      }
+      formLines.push(data.consistencyCheck.passed ? "CONSISTENCY CHECK: PASS" : `✕ MISMATCHES: ${data.consistencyCheck.mismatches.length}`);
 
       return (
         <>
           <Card>
             <CardHead>DOCUMENT REVIEW</CardHead>
             <div className="cl">
-              {docReviews.map((review) => (
+              {data.documentReviews.map((review) => (
                 <div key={review.type}>
                   <ClRow
                     label={review.type.replace(/_/g, " ").toUpperCase()}
-                    state={<StatusMark word={reviewStatusWord(review.status as "verified" | "needs_review" | "rejected")} />}
+                    state={<StatusMark word={reviewStatusWord(review.status)} />}
                   />
                   {review.issues.map((issue, j) => (
                     <div
@@ -329,7 +237,7 @@ function ServerToolOutput({
                   ))}
                 </div>
               ))}
-              {recommendations.map((rec, i) => (
+              {data.recommendations.map((rec, i) => (
                 <div key={rec.id ?? `rec-${i}`} className="poll-detail">
                   <span style={{ color: "var(--amber)" }}>▲ Check this</span> — {rec.fix}{" "}
                   <span className="mono" style={{ color: "var(--sage)" }}>+{rec.impact}%</span>
@@ -338,10 +246,7 @@ function ServerToolOutput({
             </div>
           </Card>
           <Card>
-            <MachinePanel
-              lines={formLines}
-              final={`FORM COMPLETE — ODDS ${output.approvalLikelihood as number}%`}
-            />
+            <MachinePanel lines={formLines} final={`FORM COMPLETE — ODDS ${data.approvalLikelihood}%`} />
           </Card>
           <Card>
             <CardHead>SUPPORTING PACK</CardHead>
@@ -356,31 +261,18 @@ function ServerToolOutput({
     }
 
     case "runRiskReview": {
-      const finalRecommendations = (output.finalRecommendations as Array<{
-        id?: string; issue: string; fix: string; impact: number;
-      }>) ?? [];
+      const parsed = runRiskReviewOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
+      const data: RunRiskReviewOutput = parsed.data;
       return (
         <Card>
           <CardHead>RISK REVIEW</CardHead>
           <div className="cl">
-            <ClRow
-              label="Risk score"
-              state={`${(output.riskScore as number) ?? 0}/100`}
-            />
-            <ClRow
-              label="Approval likelihood"
-              state={`${output.approvalLikelihood as number}%`}
-            />
-            <ClRow
-              label="Ready to file"
-              state={<StatusMark word={output.readyToSubmit ? "verified" : "check"} />}
-            />
-            {finalRecommendations.map((rec, i) => (
-              <div
-                key={rec.id ?? `final-${i}`}
-                className="poll-detail"
-                style={{ color: "var(--amber)" }}
-              >
+            <ClRow label="Risk score" state={`${data.riskScore}/100`} />
+            <ClRow label="Approval likelihood" state={`${data.approvalLikelihood}%`} />
+            <ClRow label="Ready to file" state={<StatusMark word={data.readyToSubmit ? "verified" : "check"} />} />
+            {data.finalRecommendations.map((rec, i) => (
+              <div key={rec.id ?? `final-${i}`} className="poll-detail" style={{ color: "var(--amber)" }}>
                 ▲ {rec.issue} — {rec.fix} (+{rec.impact}%)
               </div>
             ))}
@@ -390,19 +282,18 @@ function ServerToolOutput({
     }
 
     case "monitorCase": {
-      const emails = (output.emails as Array<{ subject: string; from: string; date: string; snippet: string }>) ?? [];
-      const rfeDetails = output.rfeDetails as { missingItem: string; explanation: string; deadline?: string } | undefined;
-      const decision = output.decision as { outcome: string; validityPeriod?: string; entries?: string } | undefined;
-      const actionNeeded = Boolean(output.actionRequired);
+      const parsed = monitorCaseOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
+      const data: MonitorCaseOutput = parsed.data;
 
-      if (decision) {
-        if (decision.outcome === "approved") {
+      if (data.decision) {
+        if (data.decision.outcome === "approved") {
           return (
             <SlotBox title="● APPROVED">
-              {decision.validityPeriod ? <div>Valid {decision.validityPeriod}</div> : null}
-              {decision.entries ? <div style={{ fontWeight: 400 }}>Entries: {decision.entries}</div> : null}
+              {data.decision.validityPeriod ? <div>Valid {data.decision.validityPeriod}</div> : null}
+              {data.decision.entries ? <div style={{ fontWeight: 400 }}>Entries: {data.decision.entries}</div> : null}
               <div style={{ marginTop: 6, fontWeight: 400, fontSize: 11.5, lineHeight: 1.5, color: "var(--ink2)" }}>
-                {output.summary as string}
+                {data.summary}
               </div>
             </SlotBox>
           );
@@ -411,26 +302,22 @@ function ServerToolOutput({
           <Card>
             <CardHead>DECISION</CardHead>
             <div className="notam-body">
-              <StatusMark word={decision.outcome === "refused" ? "problem" : "check"} />
-              <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-                {output.summary as string}
-              </div>
+              <StatusMark word={data.decision.outcome === "refused" ? "problem" : "check"} />
+              <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>{data.summary}</div>
             </div>
           </Card>
         );
       }
 
-      if (actionNeeded && rfeDetails) {
+      if (data.actionRequired && data.rfeDetails) {
         return (
           <Card className="notam">
             <CardHead>CASE MONITOR — ACTION NEEDED</CardHead>
             <div className="notam-body">
-              <strong>{rfeDetails.missingItem}</strong>
-              <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>
-                {rfeDetails.explanation}
-              </div>
+              <strong>{data.rfeDetails.missingItem}</strong>
+              <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>{data.rfeDetails.explanation}</div>
             </div>
-            {rfeDetails.deadline ? <CardFoot>RESPOND BY {rfeDetails.deadline}</CardFoot> : null}
+            {data.rfeDetails.deadline ? <CardFoot>RESPOND BY {data.rfeDetails.deadline}</CardFoot> : null}
           </Card>
         );
       }
@@ -440,12 +327,12 @@ function ServerToolOutput({
           <CardHead>CASE MONITOR</CardHead>
           <div className="notam-body">
             <span className="mono" style={{ fontSize: 9.5, letterSpacing: "0.16em", color: "var(--ink2)" }}>
-              {String(output.status ?? "").replace(/_/g, " ").toUpperCase()}
+              {data.status.replace(/_/g, " ").toUpperCase()}
             </span>
-            <div style={{ marginTop: 4 }}>{output.summary as string}</div>
-            {emails.length > 0 && (
+            <div style={{ marginTop: 4 }}>{data.summary}</div>
+            {data.emails.length > 0 && (
               <div style={{ marginTop: 8 }}>
-                {emails.map((email, i) => (
+                {data.emails.map((email, i) => (
                   <div key={i} className="poll-detail" style={{ fontSize: 11 }}>
                     {email.date} — {email.subject}
                   </div>
@@ -457,73 +344,75 @@ function ServerToolOutput({
       );
     }
 
-    case "uploadDocuments":
+    case "uploadDocuments": {
+      const parsed = uploadDocumentsOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
       return (
         <Card>
           <CardHead>UPLOAD REQUIRED</CardHead>
           <div className="cl">
-            <SageLine>
-              ○ {(output.uploadedCount as number) ?? 0} DOCUMENTS RECEIVED
-            </SageLine>
-          </div>
-        </Card>
-      );
-
-    case "uploadDocument": {
-      const doc = output.document as { type?: string } | undefined;
-      const docType = doc?.type ?? "document";
-      return (
-        <Card>
-          <CardHead>DOCUMENT RECEIVED</CardHead>
-          <div className="cl">
-            <SageLine>
-              ● {docType.replace(/_/g, " ").toUpperCase()} UPLOADED
-            </SageLine>
+            <SageLine>○ {parsed.data.uploadedCount} DOCUMENTS RECEIVED</SageLine>
           </div>
         </Card>
       );
     }
 
-    case "submitApplication":
+    case "uploadDocument": {
+      const parsed = uploadDocumentOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
+      return (
+        <Card>
+          <CardHead>DOCUMENT RECEIVED</CardHead>
+          <div className="cl">
+            <SageLine>● {parsed.data.document.type.replace(/_/g, " ").toUpperCase()} UPLOADED</SageLine>
+          </div>
+        </Card>
+      );
+    }
+
+    case "submitApplication": {
+      const parsed = submitApplicationOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
+      const data = parsed.data;
       return (
         <Card>
           <MachinePanel
             lines={[
-              output.referenceNumber ? `REF: ${output.referenceNumber as string}` : `SESSION: ${output.sessionId as string}`,
-              `STATUS: ${String(output.status ?? "").toUpperCase()}`,
+              data.referenceNumber ? `REF: ${data.referenceNumber}` : `SESSION: ${data.sessionId}`,
+              `STATUS: ${data.status.toUpperCase()}`,
             ]}
             final="APPLICATION SUBMITTED"
             showRunway
           />
         </Card>
       );
+    }
 
-    case "approveSubmission":
+    case "approveSubmission": {
+      const parsed = approveSubmissionOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
+      const data = parsed.data;
       return (
         <Card>
           <CardHead>SUBMISSION</CardHead>
           <div className="cl">
-            <SageLine>
-              {output.approved ? "● APPROVED BY USER" : "✕ REJECTED BY USER"}
-            </SageLine>
-            {output.userNote ? (
-              <div className="poll-detail" style={{ color: "var(--ink2)" }}>
-                {output.userNote as string}
-              </div>
+            <SageLine>{data.approved ? "● APPROVED BY USER" : "✕ REJECTED BY USER"}</SageLine>
+            {data.userNote ? (
+              <div className="poll-detail" style={{ color: "var(--ink2)" }}>{data.userNote}</div>
             ) : null}
           </div>
         </Card>
       );
+    }
 
     case "askQuestion": {
-      const answers = Array.isArray(output.answers)
-        ? (output.answers as ReadonlyArray<{ questionId: string; selectedOption?: string; freeText?: string; skipped?: boolean }>)
-        : [];
+      const parsed = askQuestionOutputSchema.safeParse(output);
+      if (!parsed.success) return null;
       return (
         <Card>
           <CardHead>ANSWERS RECEIVED</CardHead>
           <div className="cl">
-            {answers.map((a) => {
+            {parsed.data.answers.map((a) => {
               const display = a.skipped
                 ? "SKIPPED"
                 : a.freeText && a.selectedOption
@@ -550,45 +439,15 @@ function ServerToolOutput({
 
 // ==================== ASK QUESTION CARD ====================
 
-interface QuestionAnswer {
-  questionId: string;
-  selectedOption?: string;
-  freeText?: string;
-  skipped?: boolean;
-}
-
-interface ParsedQuestion {
-  id: string;
-  question: string;
-  options: readonly string[];
-  allowFreeText: boolean;
-}
-
-function parseQuestions(input: unknown): { context?: string; questions: ParsedQuestion[] } {
-  const parsed = isRecord(input) ? input : {};
-  const context = typeof parsed.context === "string" ? parsed.context : undefined;
-  const raw = Array.isArray(parsed.questions) ? parsed.questions : [];
-  const questions: ParsedQuestion[] = raw
-    .filter(isRecord)
-    .map((q) => ({
-      id: String(q.id ?? ""),
-      question: String(q.question ?? ""),
-      options: Array.isArray(q.options) ? q.options.filter((o): o is string => typeof o === "string") : [],
-      allowFreeText: Boolean(q.allowFreeText),
-    }));
-  return { context, questions };
-}
-
 function AskQuestionCard({
   input,
   isSubmitting,
   onSubmit,
 }: {
-  input: unknown;
+  input: AskQuestionInput;
   isSubmitting: boolean;
-  onSubmit: (answers: QuestionAnswer[]) => void;
+  onSubmit: (answers: AskQuestionAnswer[]) => void;
 }) {
-  const { context, questions } = parseQuestions(input);
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
   const [freeTexts, setFreeTexts] = useState<Record<string, string>>({});
@@ -613,9 +472,9 @@ function AskQuestionCard({
   };
 
   const handleSubmit = () => {
-    const answers: QuestionAnswer[] = questions.map((q) => {
+    const answers: AskQuestionAnswer[] = input.questions.map((q) => {
       if (skipped[q.id]) return { questionId: q.id, skipped: true };
-      const answer: QuestionAnswer = { questionId: q.id };
+      const answer: AskQuestionAnswer = { questionId: q.id };
       const selected = selections[q.id];
       if (selected) answer.selectedOption = selected;
       const text = freeTexts[q.id];
@@ -627,22 +486,15 @@ function AskQuestionCard({
 
   return (
     <Card>
-      <CardHead>{context ? context.toUpperCase() : "QUESTION"}</CardHead>
+      <CardHead>{input.context ? input.context.toUpperCase() : "QUESTION"}</CardHead>
       <div className="cl" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {questions.map((q) => {
+        {input.questions.map((q) => {
           const isSkipped = Boolean(skipped[q.id]);
           const selected = selections[q.id];
 
           return (
             <div key={q.id} style={{ opacity: isSkipped ? 0.45 : 1 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", lineHeight: 1.4 }}>
                   {q.question}
                 </div>
@@ -652,11 +504,9 @@ function AskQuestionCard({
                   disabled={isSubmitting}
                   onClick={() => isSkipped ? handleSelect(q.id, "") : handleSkip(q.id)}
                   style={{
-                    padding: "2px 8px",
-                    fontSize: 9.5,
+                    padding: "2px 8px", fontSize: 9.5,
                     color: isSkipped ? "var(--sage)" : "var(--ink2)",
-                    background: "transparent",
-                    border: "none",
+                    background: "transparent", border: "none",
                     textDecoration: isSkipped ? "none" : "underline",
                     flexShrink: 0,
                   }}
@@ -674,8 +524,7 @@ function AskQuestionCard({
                         className="btn"
                         disabled={isSubmitting}
                         style={{
-                          padding: "5px 12px",
-                          fontSize: 10.5,
+                          padding: "5px 12px", fontSize: 10.5,
                           background: selected === opt ? "var(--ink)" : "transparent",
                           color: selected === opt ? "var(--bone)" : "var(--ink)",
                           border: `1px solid ${selected === opt ? "var(--ink)" : "var(--line)"}`,
@@ -692,19 +541,12 @@ function AskQuestionCard({
                       placeholder="Or type your answer..."
                       disabled={isSubmitting}
                       value={freeTexts[q.id] ?? ""}
-                      onChange={(e) =>
-                        setFreeTexts((prev) => ({ ...prev, [q.id]: e.target.value }))
-                      }
+                      onChange={(e) => setFreeTexts((prev) => ({ ...prev, [q.id]: e.target.value }))}
                       style={{
-                        marginTop: 6,
-                        width: "100%",
-                        padding: "5px 8px",
-                        fontSize: 11,
-                        fontFamily: "var(--mono)",
-                        border: "1px solid var(--line)",
-                        background: "transparent",
-                        color: "var(--ink)",
-                        outline: "none",
+                        marginTop: 6, width: "100%", padding: "5px 8px",
+                        fontSize: 11, fontFamily: "var(--mono)",
+                        border: "1px solid var(--line)", background: "transparent",
+                        color: "var(--ink)", outline: "none",
                       }}
                     />
                   )}
@@ -714,11 +556,7 @@ function AskQuestionCard({
           );
         })}
         <div style={{ paddingTop: 4 }}>
-          <KeyButton
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            submittingLabel="SUBMITTING..."
-          >
+          <KeyButton onClick={handleSubmit} disabled={isSubmitting} submittingLabel="SUBMITTING...">
             SUBMIT ANSWERS
           </KeyButton>
         </div>
@@ -729,7 +567,7 @@ function AskQuestionCard({
 
 // ==================== CLIENT TOOL INTERACTION ====================
 
-function ClientToolPart<T extends GermainClientToolName>({
+function ClientToolPart<T extends AttacheClientToolName>({
   part,
   toolName,
   onOutput,
@@ -737,7 +575,7 @@ function ClientToolPart<T extends GermainClientToolName>({
 }: {
   part: ToolPart<T>;
   toolName: T;
-  onOutput: (result: GermainClientToolResult) => void;
+  onOutput: (result: AttacheClientToolResult) => void;
   renderOutput: (output: Record<string, unknown>) => ReactNode;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -753,78 +591,26 @@ function ClientToolPart<T extends GermainClientToolName>({
   }
 
   if (part.state === "output-available" && part.output) {
-    return renderOutput(isRecord(part.output) ? part.output : { value: part.output });
+    const raw = part.output;
+    return renderOutput(typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : { value: raw });
   }
-
-  const handleAction = () => {
-    setIsSubmitting(true);
-
-    switch (toolName) {
-      case "uploadDocuments": {
-        const requiredTypes = stringArrayField(input, "requiredTypes");
-        onOutput({
-          tool: "uploadDocuments", toolCallId: part.toolCallId,
-          output: {
-            success: true,
-            uploadedCount: requiredTypes.length || 3,
-            documents: requiredTypes.map((type, i) => ({
-              id: `doc-${i}`, type, name: `${type.replace("_", " ")}.pdf`, status: "uploaded" as const,
-            })),
-          },
-        });
-        break;
-      }
-      case "uploadDocument": {
-        const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
-        onOutput({
-          tool: "uploadDocument", toolCallId: part.toolCallId,
-          output: {
-            uploaded: true,
-            document: {
-              id: `doc-${docType}-${Date.now()}`,
-              type: docType,
-              name: `${docType.replace(/_/g, " ")}.pdf`,
-              status: "uploaded" as const,
-            },
-          },
-        });
-        break;
-      }
-      case "submitApplication":
-        onOutput({
-          tool: "submitApplication", toolCallId: part.toolCallId,
-          output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
-        });
-        break;
-      case "approveSubmission":
-        onOutput({
-          tool: "approveSubmission", toolCallId: part.toolCallId,
-          output: { approved: true },
-        });
-        break;
-    }
-    setIsSubmitting(false);
-  };
 
   switch (toolName) {
     case "uploadDocuments": {
-      const requiredTypes = stringArrayField(input, "requiredTypes");
-      const criticalDocuments = stringArrayField(input, "criticalDocuments");
+      const parsed = uploadDocumentsInputSchema.safeParse(input);
+      if (!parsed.success) return null;
+      const data: UploadDocumentsInput = parsed.data;
       return (
         <FileUpload
-          requiredTypes={requiredTypes}
-          criticalDocuments={criticalDocuments}
+          requiredTypes={data.requiredTypes}
+          criticalDocuments={data.criticalDocuments}
           isSubmitting={isSubmitting}
           onUpload={(documents) => {
             setIsSubmitting(true);
             onOutput({
               tool: "uploadDocuments",
               toolCallId: part.toolCallId,
-              output: {
-                success: true,
-                uploadedCount: documents.length,
-                documents,
-              },
+              output: { success: true, uploadedCount: documents.length, documents },
             });
             setIsSubmitting(false);
           }}
@@ -833,26 +619,22 @@ function ClientToolPart<T extends GermainClientToolName>({
     }
 
     case "uploadDocument": {
-      const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
-      const reason = isRecord(input) ? (input.reason as string) ?? "" : "";
-      const guidanceText = isRecord(input) ? (input.guidance as string) ?? "" : "";
-      const isCritical = isRecord(input) ? Boolean(input.critical) : false;
+      const parsed = uploadDocumentInputSchema.safeParse(input);
+      if (!parsed.success) return null;
+      const data: UploadDocumentInput = parsed.data;
       return (
         <SingleFileUpload
-          documentType={docType}
-          reason={reason}
-          guidance={guidanceText}
-          critical={isCritical}
+          documentType={data.documentType}
+          reason={data.reason}
+          guidance={data.guidance}
+          critical={data.critical}
           isSubmitting={isSubmitting}
           onUpload={(document) => {
             setIsSubmitting(true);
             onOutput({
               tool: "uploadDocument",
               toolCallId: part.toolCallId,
-              output: {
-                uploaded: true,
-                document,
-              },
+              output: { uploaded: true, document },
             });
             setIsSubmitting(false);
           }}
@@ -861,9 +643,11 @@ function ClientToolPart<T extends GermainClientToolName>({
     }
 
     case "askQuestion": {
+      const parsed = askQuestionInputSchema.safeParse(input);
+      if (!parsed.success) return null;
       return (
         <AskQuestionCard
-          input={input}
+          input={parsed.data}
           isSubmitting={isSubmitting}
           onSubmit={(answers) => {
             setIsSubmitting(true);
@@ -879,10 +663,10 @@ function ClientToolPart<T extends GermainClientToolName>({
     }
 
     case "submitApplication": {
-      const formData = isRecord(input) ? (input.formData as Record<string, string>) : {};
-      const formLines = formData
-        ? Object.entries(formData).slice(0, 6).map(([k, v]) => `${k}: ${v}`)
-        : [];
+      const parsed = submitApplicationInputSchema.safeParse(input);
+      if (!parsed.success) return null;
+      const data: SubmitApplicationInput = parsed.data;
+      const formLines = Object.entries(data.formData).slice(0, 6).map(([k, v]) => `${k}: ${v}`);
       return (
         <Card className="notam">
           <CardHead>SUBMIT APPLICATION</CardHead>
@@ -896,7 +680,14 @@ function ClientToolPart<T extends GermainClientToolName>({
             </div>
             <div style={{ paddingTop: 8 }}>
               <KeyButton
-                onClick={handleAction}
+                onClick={() => {
+                  setIsSubmitting(true);
+                  onOutput({
+                    tool: "submitApplication", toolCallId: part.toolCallId,
+                    output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
+                  });
+                  setIsSubmitting(false);
+                }}
                 disabled={isSubmitting}
                 submittingLabel="LAUNCHING BROWSER…"
               >
@@ -909,16 +700,17 @@ function ClientToolPart<T extends GermainClientToolName>({
     }
 
     case "approveSubmission": {
-      const formSummary = isRecord(input) ? (input.formSummary as Record<string, string>) : {};
-      const totalFees = isRecord(input) ? numberField(input, "totalFees", 0) : 0;
+      const parsed = approveSubmissionInputSchema.safeParse(input);
+      if (!parsed.success) return null;
+      const data: ApproveSubmissionInput = parsed.data;
       return (
         <Card className="notam">
           <CardHead>APPROVE SUBMISSION</CardHead>
           <div className="cl">
-            {formSummary && Object.entries(formSummary).map(([k, v], i) => (
+            {Object.entries(data.formSummary).map(([k, v], i) => (
               <ClRow key={i} label={k.replace(/_/g, " ").toUpperCase()} state={v} />
             ))}
-            <ClRow label="Total fees" state={`€${totalFees}`} />
+            <ClRow label="Total fees" state={`€${data.totalFees}`} />
             <div className="poll-detail" style={{ color: "var(--amber)", marginTop: 8 }}>
               ▲ Review the form in the browser panel. Once you approve,
               the application will be submitted.
@@ -928,8 +720,7 @@ function ClientToolPart<T extends GermainClientToolName>({
                 onClick={() => {
                   setIsSubmitting(true);
                   onOutput({
-                    tool: "approveSubmission",
-                    toolCallId: part.toolCallId,
+                    tool: "approveSubmission", toolCallId: part.toolCallId,
                     output: { approved: true },
                   });
                   setIsSubmitting(false);
@@ -945,8 +736,7 @@ function ClientToolPart<T extends GermainClientToolName>({
                 style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
                 onClick={() => {
                   onOutput({
-                    tool: "approveSubmission",
-                    toolCallId: part.toolCallId,
+                    tool: "approveSubmission", toolCallId: part.toolCallId,
                     output: { approved: false, userNote: "User rejected the submission" },
                   });
                 }}

@@ -4,15 +4,8 @@ import { z } from "zod";
 const questionSchema = z.object({
   id: z.string().describe("Unique identifier for this question"),
   question: z.string().describe("The question text to display"),
-  options: z
-    .array(z.string())
-    .describe("Predefined answer choices shown as clickable buttons"),
-  allowFreeText: z
-    .boolean()
-    .optional()
-    .describe(
-      "When true, show an additional free-text input alongside the options",
-    ),
+  options: z.array(z.string()).describe("Predefined answer choices shown as clickable buttons"),
+  allowFreeText: z.boolean().optional().describe("When true, show an additional free-text input alongside the options"),
 });
 
 const answerSchema = z.object({
@@ -22,9 +15,18 @@ const answerSchema = z.object({
   skipped: z.boolean().optional(),
 });
 
-const askQuestionOutputSchema = z.object({
+export const askQuestionInputSchema = z.object({
+  questions: z.array(questionSchema).min(1),
+  context: z.string().optional().describe("Brief heading or context shown above the questions"),
+});
+
+export const askQuestionOutputSchema = z.object({
   answers: z.array(answerSchema),
 });
+
+export type AskQuestionInput = z.infer<typeof askQuestionInputSchema>;
+export type AskQuestionOutput = z.infer<typeof askQuestionOutputSchema>;
+export type AskQuestionAnswer = z.infer<typeof answerSchema>;
 
 export const askQuestionTool = tool({
   description:
@@ -35,14 +37,6 @@ export const askQuestionTool = tool({
     "optionally allow a free-text response alongside the predefined options. " +
     "The user sees all questions at once and submits answers together. " +
     "Users may skip individual questions they prefer not to answer.",
-  inputSchema: z.object({
-    questions: z.array(questionSchema).min(1),
-    context: z
-      .string()
-      .optional()
-      .describe("Brief heading or context shown above the questions"),
-  }),
+  inputSchema: askQuestionInputSchema,
   outputSchema: askQuestionOutputSchema,
 });
-
-export type AskQuestionOutput = z.infer<typeof askQuestionOutputSchema>;

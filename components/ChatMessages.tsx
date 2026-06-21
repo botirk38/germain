@@ -1,7 +1,7 @@
 "use client";
 
-import type { GermainUIMessage } from "@/lib/agents/germain";
-import type { GermainClientToolResult } from "@/lib/tools";
+import type { AttacheUIMessage } from "@/lib/attache/agent";
+import type { AttacheClientToolResult } from "@/lib/tools";
 import {
   EvaluateCaseToolPart,
   ReviewAndPrepareToolPart,
@@ -18,12 +18,12 @@ import { Fragment } from "react";
 import { isTextUIPart, isToolUIPart } from "ai";
 
 interface ChatMessagesProps {
-  messages: GermainUIMessage[];
+  messages: AttacheUIMessage[];
   status: string;
-  onToolOutput: (result: GermainClientToolResult) => void;
+  onToolOutput: (result: AttacheClientToolResult) => void;
 }
 
-function hasVisibleContent(parts: GermainUIMessage["parts"]): boolean {
+function hasVisibleContent(parts: AttacheUIMessage["parts"]): boolean {
   if (!parts) return false;
   return parts.some(
     (p) => (isTextUIPart(p) && Boolean(p.text)) || isToolUIPart(p),
@@ -85,7 +85,6 @@ export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesPro
         </Fragment>
       ))}
 
-      {/* Streaming indicator */}
       {status === "streaming" && (
         <div className="msg typing">
           <div className="callsign" aria-hidden="true">

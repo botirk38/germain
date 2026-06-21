@@ -21,7 +21,7 @@ const decisionSchema = z.object({
   reasons: z.array(z.string()).optional(),
 });
 
-const monitorOutputSchema = z.object({
+export const monitorCaseOutputSchema = z.object({
   status: z.enum(["no_updates", "rfe_issued", "appointment_update", "decision_made", "biometrics_scheduled"]),
   emails: z.array(emailSchema),
   actionRequired: z.boolean(),
@@ -30,16 +30,16 @@ const monitorOutputSchema = z.object({
   decision: decisionSchema.optional(),
 });
 
-type MonitorOutput = z.infer<typeof monitorOutputSchema>;
+export type MonitorCaseOutput = z.infer<typeof monitorCaseOutputSchema>;
 
 function buildResult(
-  status: MonitorOutput["status"],
-  emails: MonitorOutput["emails"],
+  status: MonitorCaseOutput["status"],
+  emails: MonitorCaseOutput["emails"],
   actionRequired: boolean,
   summary: string,
-  rfeDetails?: MonitorOutput["rfeDetails"],
-  decision?: MonitorOutput["decision"],
-): MonitorOutput {
+  rfeDetails?: MonitorCaseOutput["rfeDetails"],
+  decision?: MonitorCaseOutput["decision"],
+): MonitorCaseOutput {
   return { status, emails, actionRequired, summary, rfeDetails, decision };
 }
 
@@ -50,8 +50,8 @@ export const monitorCaseTool = tool({
     applicantEmail: z.string().describe("User's email address to search"),
     currentStatus: z.string().describe("Current case status for context"),
   }),
-  outputSchema: monitorOutputSchema,
-  execute: async ({ referenceNumber, applicantEmail, currentStatus }, _options: ToolExecutionOptions): Promise<MonitorOutput> => {
+  outputSchema: monitorCaseOutputSchema,
+  execute: async ({ referenceNumber, applicantEmail, currentStatus }, _options: ToolExecutionOptions): Promise<MonitorCaseOutput> => {
     void applicantEmail;
 
     if (currentStatus === "submitted") {
