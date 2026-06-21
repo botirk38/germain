@@ -9,6 +9,7 @@ import {
   MonitorCaseToolPart,
   UploadDocumentsToolPart,
   UploadDocumentToolPart,
+  AskQuestionToolPart,
   SubmitApplicationToolPart,
   ApproveSubmissionToolPart,
 } from "./ToolCard";
@@ -68,6 +69,8 @@ export function ChatMessages({ messages, status, onToolOutput }: ChatMessagesPro
                       return <UploadDocumentsToolPart key={key} part={part} onOutput={onToolOutput} />;
                     case "tool-uploadDocument":
                       return <UploadDocumentToolPart key={key} part={part} onOutput={onToolOutput} />;
+                    case "tool-askQuestion":
+                      return <AskQuestionToolPart key={key} part={part} onOutput={onToolOutput} />;
                     case "tool-submitApplication":
                       return <SubmitApplicationToolPart key={key} part={part} onOutput={onToolOutput} />;
                     case "tool-approveSubmission":

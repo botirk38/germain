@@ -4,6 +4,8 @@ import { evaluateCaseTool } from "./tools/evaluate-case";
 import { reviewAndPrepareTool } from "./tools/review-and-prepare";
 import { submitApplicationTool, approveSubmissionTool } from "./tools/submit-application";
 import { monitorCaseTool } from "./tools/monitor-case";
+import { askQuestionTool } from "./tools/ask-question";
+import type { AskQuestionOutput } from "./tools/ask-question";
 
 // ==================== SERVER-EXECUTE TOOLS ====================
 
@@ -186,6 +188,10 @@ export const uploadDocumentTool = tool({
 // Re-export browser-use tools
 export { submitApplicationTool, approveSubmissionTool } from "./tools/submit-application";
 
+// Re-export askQuestion tool
+export { askQuestionTool } from "./tools/ask-question";
+export type { AskQuestionOutput } from "./tools/ask-question";
+
 // ==================== TOOL REGISTRY ====================
 
 export const germainServerTools = {
@@ -198,6 +204,7 @@ export const germainServerTools = {
 export const germainClientTools = {
   uploadDocuments: uploadDocumentsTool,
   uploadDocument: uploadDocumentTool,
+  askQuestion: askQuestionTool,
   submitApplication: submitApplicationTool,
   approveSubmission: approveSubmissionTool,
 };
@@ -229,5 +236,6 @@ export type ApproveSubmissionOutput = {
 export type GermainClientToolResult =
   | { tool: "uploadDocuments"; toolCallId: string; output: UploadDocumentsOutput }
   | { tool: "uploadDocument"; toolCallId: string; output: UploadDocumentOutput }
+  | { tool: "askQuestion"; toolCallId: string; output: AskQuestionOutput }
   | { tool: "submitApplication"; toolCallId: string; output: SubmitApplicationOutput }
   | { tool: "approveSubmission"; toolCallId: string; output: ApproveSubmissionOutput };

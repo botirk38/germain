@@ -36,6 +36,7 @@ const toolHeaders: Record<string, string> = {
   evaluateCase: "CASE EVALUATION",
   uploadDocuments: "UPLOAD REQUIRED",
   uploadDocument: "UPLOAD DOCUMENT",
+  askQuestion: "QUESTION",
   reviewAndPrepare: "REVIEW & PREPARE",
   runRiskReview: "RISK REVIEW",
   submitApplication: "SUBMIT APPLICATION",
@@ -153,7 +154,6 @@ export function MonitorCaseToolPart({ part }: { part: ToolPart<"monitorCase"> })
   return <ToolStateCard part={part} toolName="monitorCase">{(output) => <ServerToolOutput toolName="monitorCase" output={output} />}</ToolStateCard>;
 }
 
-
 // ==================== CLIENT-INTERACTION TOOL PARTS ====================
 
 export function UploadDocumentsToolPart({
@@ -203,6 +203,23 @@ export function SubmitApplicationToolPart({
       toolName="submitApplication"
       onOutput={onOutput}
       renderOutput={(output) => <ServerToolOutput toolName="submitApplication" output={output} />}
+    />
+  );
+}
+
+export function AskQuestionToolPart({
+  part,
+  onOutput,
+}: {
+  part: ToolPart<"askQuestion">;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <ClientToolPart
+      part={part}
+      toolName="askQuestion"
+      onOutput={onOutput}
+      renderOutput={(output) => <ServerToolOutput toolName="askQuestion" output={output} />}
     />
   );
 }
@@ -498,6 +515,24 @@ function ServerToolOutput({
         </Card>
       );
 
+    case "askQuestion": {
+      const answers = (output.answers as Array<{ questionId: string; selectedOption: string; freeText?: string }>) ?? [];
+      return (
+        <Card>
+          <CardHead>ANSWERS RECEIVED</CardHead>
+          <div className="cl">
+            {answers.map((a) => (
+              <ClRow
+                key={a.questionId}
+                label={a.questionId}
+                state={a.freeText ? `${a.selectedOption} (${a.freeText})` : a.selectedOption}
+              />
+            ))}
+          </div>
+        </Card>
+      );
+    }
+
     default:
       return (
         <Card>
@@ -508,6 +543,131 @@ function ServerToolOutput({
         </Card>
       );
   }
+}
+
+// ==================== ASK QUESTION CARD ====================
+
+type QuestionAnswer = { questionId: string; selectedOption: string; freeText?: string };
+
+function AskQuestionCard({
+  input,
+  isSubmitting,
+  onSubmit,
+}: {
+  input: unknown;
+  isSubmitting: boolean;
+  onSubmit: (answers: QuestionAnswer[]) => void;
+}) {
+  const parsed = isRecord(input) ? input : {};
+  const contextText = typeof parsed.context === "string" ? parsed.context : undefined;
+  const questions = Array.isArray(parsed.questions)
+    ? (parsed.questions as Array<Record<string, unknown>>)
+    : [];
+
+  const [selections, setSelections] = useState<Record<string, string>>({});
+  const [freeTexts, setFreeTexts] = useState<Record<string, string>>({});
+
+  const allAnswered = questions.every((q) => {
+    const id = q.id as string;
+    return Boolean(selections[id]);
+  });
+
+  const handleSubmit = () => {
+    const answers: QuestionAnswer[] = questions.map((q) => {
+      const id = q.id as string;
+      const answer: QuestionAnswer = {
+        questionId: id,
+        selectedOption: selections[id] ?? "",
+      };
+      if (freeTexts[id]) answer.freeText = freeTexts[id];
+      return answer;
+    });
+    onSubmit(answers);
+  };
+
+  return (
+    <Card>
+      {contextText ? <CardHead>{contextText.toUpperCase()}</CardHead> : <CardHead>QUESTION</CardHead>}
+      <div className="cl" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {questions.map((q) => {
+          const id = q.id as string;
+          const questionText = q.question as string;
+          const options = Array.isArray(q.options) ? (q.options as string[]) : [];
+          const allowFreeText = Boolean(q.allowFreeText);
+          const selected = selections[id];
+
+          return (
+            <div key={id}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--ink)",
+                  marginBottom: 6,
+                  lineHeight: 1.4,
+                }}
+              >
+                {questionText}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {options.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    className="btn"
+                    disabled={isSubmitting}
+                    style={{
+                      padding: "5px 12px",
+                      fontSize: 10.5,
+                      background: selected === opt ? "var(--ink)" : "transparent",
+                      color: selected === opt ? "var(--bone)" : "var(--ink)",
+                      border: `1px solid ${selected === opt ? "var(--ink)" : "var(--line)"}`,
+                    }}
+                    onClick={() =>
+                      setSelections((prev) => ({ ...prev, [id]: opt }))
+                    }
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              {allowFreeText && (
+                <input
+                  type="text"
+                  placeholder="Or type your answer..."
+                  disabled={isSubmitting}
+                  value={freeTexts[id] ?? ""}
+                  onChange={(e) =>
+                    setFreeTexts((prev) => ({ ...prev, [id]: e.target.value }))
+                  }
+                  style={{
+                    marginTop: 6,
+                    width: "100%",
+                    padding: "5px 8px",
+                    fontSize: 11,
+                    fontFamily: "var(--mono)",
+                    border: "1px solid var(--line)",
+                    background: "transparent",
+                    color: "var(--ink)",
+                    outline: "none",
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+        <div style={{ paddingTop: 4 }}>
+          <KeyButton
+            onClick={handleSubmit}
+            disabled={isSubmitting || !allAnswered}
+            submittingLabel="SUBMITTING..."
+          >
+            SUBMIT ANSWERS
+          </KeyButton>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 // ==================== CLIENT TOOL INTERACTION ====================
@@ -579,6 +739,9 @@ function ClientToolPart<T extends GermainClientToolName>({
           output: { sessionId: `bus-${Date.now()}`, liveViewUrl: "", status: "ready_for_review" },
         });
         break;
+      case "askQuestion":
+        // fallback — individual option clicks handle submission
+        break;
       case "approveSubmission":
         onOutput({
           tool: "approveSubmission", toolCallId: part.toolCallId,
@@ -636,6 +799,24 @@ function ClientToolPart<T extends GermainClientToolName>({
                 uploaded: true,
                 document,
               },
+            });
+            setIsSubmitting(false);
+          }}
+        />
+      );
+    }
+
+    case "askQuestion": {
+      return (
+        <AskQuestionCard
+          input={input}
+          isSubmitting={isSubmitting}
+          onSubmit={(answers) => {
+            setIsSubmitting(true);
+            onOutput({
+              tool: "askQuestion",
+              toolCallId: part.toolCallId,
+              output: { answers },
             });
             setIsSubmitting(false);
           }}

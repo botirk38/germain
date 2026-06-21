@@ -122,6 +122,7 @@ export function splitFlapWord(status: CaseStatus): string {
 export const CLIENT_TOOLS = [
   "uploadDocuments",
   "uploadDocument",
+  "askQuestion",
   "submitApplication",
   "approveSubmission",
 ] as const;
