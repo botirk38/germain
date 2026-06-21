@@ -65,6 +65,14 @@ export default function GermainPage() {
           output: result.output,
         });
         break;
+      case "uploadDocument":
+        addToolOutput({
+          toolCallId: result.toolCallId,
+          tool: "uploadDocument",
+          state: "output-available",
+          output: result.output,
+        });
+        break;
       case "submitApplication":
         addToolOutput({
           toolCallId: result.toolCallId,

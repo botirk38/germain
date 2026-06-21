@@ -22,7 +22,7 @@ const recommendationSchema = z.object({
 });
 
 export const reviewAndPrepareTool = tool({
-  description: "Review all uploaded documents, verify validity, generate the application form from case data, and prepare supporting documents (cover letter, itinerary, proof of ties). Call this after documents are uploaded. Replaces reviewDocuments + generateApplication + prepareSupportingPack.",
+  description: "Review all uploaded documents, verify validity, generate the application form from case data, and prepare supporting documents (cover letter, itinerary, proof of ties). Call this after documents are uploaded.",
   inputSchema: z.object({
     documents: z.array(documentInputSchema),
     applicantProfile: z.object({

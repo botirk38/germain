@@ -7,6 +7,7 @@ import { KeyButton } from "@/components/attache/KeyButton";
 import { MachinePanel } from "@/components/attache/MachinePanel";
 import { SlotBox } from "@/components/attache/SlotBox";
 import { FileUpload } from "@/components/attache/FileUpload";
+import { SingleFileUpload } from "@/components/attache/SingleFileUpload";
 import { reviewStatusWord } from "@/lib/attache-display";
 import type { GermainUIMessage } from "@/lib/agents/germain";
 import type {
@@ -37,27 +38,14 @@ interface ToolPartRendererProps {
 }
 
 const toolHeaders: Record<string, string> = {
-  // Consolidated tools
   evaluateCase: "CASE EVALUATION",
   uploadDocuments: "UPLOAD REQUIRED",
+  uploadDocument: "UPLOAD DOCUMENT",
   reviewAndPrepare: "REVIEW & PREPARE",
   runRiskReview: "RISK REVIEW",
   submitApplication: "SUBMIT APPLICATION",
   approveSubmission: "APPROVE SUBMISSION",
   monitorCase: "CASE MONITOR",
-  // Legacy tool names (backward compatibility)
-  assessEligibility: "ELIGIBILITY",
-  recommendVisaRoute: "VISA ROUTE",
-  buildChecklist: "DOCUMENT CHECKLIST",
-  reviewDocuments: "DOCUMENT REVIEW",
-  generateApplication: "APPLICATION FORM",
-  prepareSupportingPack: "SUPPORTING PACK",
-  bookAppointment: "APPOINTMENT",
-  payFees: "FEES",
-  submitFiling: "READY TO FILE",
-  trackEmbassyUpdates: "EMBASSY UPDATE",
-  trackDecision: "DECISION",
-  provideMissingInsurance: "RFE — INSURANCE REQUIRED",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,7 +140,7 @@ function ToolStateCard<T extends string>({
   return <WorkingCard header={header} />;
 }
 
-// ==================== CONSOLIDATED TOOL PARTS ====================
+// ==================== SERVER TOOL PARTS ====================
 
 export function EvaluateCaseToolPart({ part }: { part: ToolPart<"evaluateCase"> }) {
   return <ToolStateCard part={part} toolName="evaluateCase">{(output) => <ServerToolOutput toolName="evaluateCase" output={output} />}</ToolStateCard>;
@@ -170,43 +158,6 @@ export function MonitorCaseToolPart({ part }: { part: ToolPart<"monitorCase"> })
   return <ToolStateCard part={part} toolName="monitorCase">{(output) => <ServerToolOutput toolName="monitorCase" output={output} />}</ToolStateCard>;
 }
 
-// ==================== LEGACY TOOL PARTS (backward compat) ====================
-
-export function AssessEligibilityToolPart({ part }: { part: ToolPart<"assessEligibility"> }) {
-  return <ToolStateCard part={part} toolName="assessEligibility">{(output) => <ServerToolOutput toolName="assessEligibility" output={output} />}</ToolStateCard>;
-}
-
-export function RecommendVisaRouteToolPart({ part }: { part: ToolPart<"recommendVisaRoute"> }) {
-  return <ToolStateCard part={part} toolName="recommendVisaRoute">{(output) => <ServerToolOutput toolName="recommendVisaRoute" output={output} />}</ToolStateCard>;
-}
-
-export function BuildChecklistToolPart({ part }: { part: ToolPart<"buildChecklist"> }) {
-  return <ToolStateCard part={part} toolName="buildChecklist">{(output) => <ServerToolOutput toolName="buildChecklist" output={output} />}</ToolStateCard>;
-}
-
-export function ReviewDocumentsToolPart({ part }: { part: ToolPart<"reviewDocuments"> }) {
-  return <ToolStateCard part={part} toolName="reviewDocuments">{(output) => <ServerToolOutput toolName="reviewDocuments" output={output} />}</ToolStateCard>;
-}
-
-export function GenerateApplicationToolPart({ part }: { part: ToolPart<"generateApplication"> }) {
-  return <ToolStateCard part={part} toolName="generateApplication">{(output) => <ServerToolOutput toolName="generateApplication" output={output} />}</ToolStateCard>;
-}
-
-export function PrepareSupportingPackToolPart({ part }: { part: ToolPart<"prepareSupportingPack"> }) {
-  return <ToolStateCard part={part} toolName="prepareSupportingPack">{(output) => <ServerToolOutput toolName="prepareSupportingPack" output={output} />}</ToolStateCard>;
-}
-
-export function BookAppointmentToolPart({ part }: { part: ToolPart<"bookAppointment"> }) {
-  return <ToolStateCard part={part} toolName="bookAppointment">{(output) => <ServerToolOutput toolName="bookAppointment" output={output} />}</ToolStateCard>;
-}
-
-export function TrackEmbassyUpdatesToolPart({ part }: { part: ToolPart<"trackEmbassyUpdates"> }) {
-  return <ToolStateCard part={part} toolName="trackEmbassyUpdates">{(output) => <ServerToolOutput toolName="trackEmbassyUpdates" output={output} />}</ToolStateCard>;
-}
-
-export function TrackDecisionToolPart({ part }: { part: ToolPart<"trackDecision"> }) {
-  return <ToolStateCard part={part} toolName="trackDecision">{(output) => <ServerToolOutput toolName="trackDecision" output={output} />}</ToolStateCard>;
-}
 
 // ==================== CLIENT-INTERACTION TOOL PARTS ====================
 
@@ -223,6 +174,23 @@ export function UploadDocumentsToolPart({
       toolName="uploadDocuments"
       onOutput={onOutput}
       renderOutput={(output) => <ServerToolOutput toolName="uploadDocuments" output={output} />}
+    />
+  );
+}
+
+export function UploadDocumentToolPart({
+  part,
+  onOutput,
+}: {
+  part: ToolPart<"uploadDocument">;
+  onOutput: (result: GermainClientToolResult) => void;
+}) {
+  return (
+    <ClientToolPart
+      part={part}
+      toolName="uploadDocument"
+      onOutput={onOutput}
+      renderOutput={(output) => <ServerToolOutput toolName="uploadDocument" output={output} />}
     />
   );
 }
@@ -265,7 +233,6 @@ export function ApproveSubmissionToolPart({
 
 export function ToolPartRenderer({ part, onOutput }: ToolPartRendererProps) {
   switch (part.type) {
-    // Consolidated tools
     case "tool-evaluateCase":
       return <EvaluateCaseToolPart part={part} />;
     case "tool-reviewAndPrepare":
@@ -276,12 +243,12 @@ export function ToolPartRenderer({ part, onOutput }: ToolPartRendererProps) {
       return <MonitorCaseToolPart part={part} />;
     case "tool-uploadDocuments":
       return <UploadDocumentsToolPart part={part} onOutput={onOutput} />;
+    case "tool-uploadDocument":
+      return <UploadDocumentToolPart part={part} onOutput={onOutput} />;
     case "tool-submitApplication":
       return <SubmitApplicationToolPart part={part} onOutput={onOutput} />;
     case "tool-approveSubmission":
       return <ApproveSubmissionToolPart part={part} onOutput={onOutput} />;
-    // Legacy tool names are kept in ServerToolOutput for backward compatibility
-    // but the agent only uses consolidated tool names going forward
     default:
       return null;
   }
@@ -297,7 +264,6 @@ function ServerToolOutput({
   output: Record<string, unknown>;
 }) {
   switch (toolName) {
-    // ===== Consolidated tools =====
 
     case "evaluateCase": {
       const requiredDocuments = (output.requiredDocuments as Array<{
@@ -504,7 +470,6 @@ function ServerToolOutput({
       );
     }
 
-    // Client tools after user acted
     case "uploadDocuments":
       return (
         <Card>
@@ -516,6 +481,21 @@ function ServerToolOutput({
           </div>
         </Card>
       );
+
+    case "uploadDocument": {
+      const doc = output.document as { type?: string } | undefined;
+      const docType = doc?.type ?? "document";
+      return (
+        <Card>
+          <CardHead>DOCUMENT RECEIVED</CardHead>
+          <div className="cl">
+            <SageLine>
+              ● {docType.replace(/_/g, " ").toUpperCase()} UPLOADED
+            </SageLine>
+          </div>
+        </Card>
+      );
+    }
 
     case "submitApplication":
       return (
@@ -544,290 +524,6 @@ function ServerToolOutput({
                 {output.userNote as string}
               </div>
             ) : null}
-          </div>
-        </Card>
-      );
-
-    // ===== Legacy tool outputs (backward compat) =====
-
-    case "assessEligibility":
-      return (
-        <Card>
-          <CardHead>ELIGIBILITY</CardHead>
-          <div className="cl">
-            <ClRow
-              label="Eligible"
-              state={<StatusMark word={output.eligible ? "verified" : "problem"} />}
-            />
-            <ClRow label="Visa type" state={output.visaType as string} />
-            <ClRow
-              label="Base odds"
-              state={`${output.baseLikelihood as number}%`}
-            />
-            <div className="poll-detail" style={{ paddingTop: 4 }}>
-              {output.reasoning as string}
-            </div>
-          </div>
-        </Card>
-      );
-
-    case "recommendVisaRoute": {
-      const requirements = (output.requirements as string[]) ?? [];
-      return (
-        <Card>
-          <CardHead>VISA ROUTE</CardHead>
-          <div className="cl">
-            <div
-              className="mono"
-              style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.1em", padding: "8px 0 2px" }}
-            >
-              {output.consulate as string}
-            </div>
-            <ClRow label="Category" state={String(output.visaCategory ?? "").toUpperCase()} />
-            <ClRow label="Processing time" state={output.processingTime as string} />
-            <ClRow label="Fee" state={`€${output.visaFee as number}`} />
-            {requirements.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, padding: "8px 0 2px" }}>
-                {requirements.slice(0, 4).map((req, i) => (
-                  <span key={i} className="fchip">{req}</span>
-                ))}
-              </div>
-            )}
-          </div>
-          <CardFoot>+{output.oddsBoost as number} ODDS</CardFoot>
-        </Card>
-      );
-    }
-
-    case "buildChecklist": {
-      const requiredDocuments = (output.requiredDocuments as Array<{
-        type: string; description: string; critical: boolean;
-      }>) ?? [];
-      const optionalDocuments = (output.optionalDocuments as string[]) ?? [];
-      const criticalCount = requiredDocuments.filter((d) => d.critical).length;
-      return (
-        <Card>
-          <CardHead>DOCUMENT CHECKLIST</CardHead>
-          <div className="cl">
-            <ClRow label="Required documents" state={`${requiredDocuments.length}`} />
-            <ClRow label="Critical" state={`${criticalCount}`} critical />
-            {optionalDocuments.length > 0 && (
-              <ClRow label="Optional" state={`${optionalDocuments.length}`} />
-            )}
-          </div>
-          <CardFoot>
-            EST. {output.estimatedCompletionDays as number} DAYS · LISTED IN THE SIDEBAR
-          </CardFoot>
-        </Card>
-      );
-    }
-
-    case "reviewDocuments": {
-      const fields = (output.extractedFields as Record<string, string>) ?? {};
-      const issues = (output.issues as Array<{ severity: string; message: string; impact: number }>) ?? [];
-      const recommendations = (output.recommendations as Array<{
-        id?: string; issue: string; fix: string; impact: number;
-      }>) ?? [];
-      const verificationStatus = output.verificationStatus as "verified" | "needs_review" | "rejected" | undefined;
-      return (
-        <Card>
-          <CardHead>DOCUMENT REVIEW</CardHead>
-          <div className="cl">
-            {Object.entries(fields).map(([field, value], i) => (
-              <div key={field} className="cl-row poll-row" style={{ animationDelay: `${i * 90}ms` }}>
-                <span>{field.replace(/_/g, " ").toUpperCase()}</span>
-                <span className="dots" />
-                <span className="state">{value}</span>
-              </div>
-            ))}
-            <ClRow
-              label="Status"
-              state={verificationStatus ? <StatusMark word={reviewStatusWord(verificationStatus)} /> : <StatusMark word="waiting" />}
-            />
-            {issues.map((issue, i) => (
-              <div
-                key={`issue-${i}`}
-                className={issue.severity === "critical" ? "poll-detail bad" : "poll-detail"}
-                style={issue.severity === "warning" ? { color: "var(--amber)" } : undefined}
-              >
-                {issue.severity === "critical" ? "✕ " : issue.severity === "warning" ? "▲ " : ""}
-                {issue.message}
-              </div>
-            ))}
-            {recommendations.map((rec, i) => (
-              <div key={rec.id ?? `rec-${i}`} className="poll-detail">
-                <span style={{ color: "var(--amber)" }}>▲ Check this</span> — {rec.fix}{" "}
-                <span className="mono" style={{ color: "var(--sage)" }}>+{rec.impact}%</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      );
-    }
-
-    case "generateApplication": {
-      const formData = (output.formData as Record<string, string>) ?? {};
-      const consistency = output.consistencyCheck as { passed: boolean; mismatches: string[] } | undefined;
-      const lines = Object.entries(formData).map(
-        ([field, value]) => `${field.toUpperCase()}: ${value || "—"} ✓`
-      );
-      if (consistency) {
-        if (consistency.passed) {
-          lines.push("CONSISTENCY CHECK: PASS");
-        } else {
-          for (const mismatch of consistency.mismatches) {
-            lines.push(`✕ ${mismatch}`);
-          }
-        }
-      }
-      return (
-        <Card>
-          <MachinePanel
-            lines={lines}
-            final={`FORM COMPLETE — EST. ODDS ${output.estimatedApprovalOdds as number}%`}
-          />
-        </Card>
-      );
-    }
-
-    case "prepareSupportingPack":
-      return (
-        <Card>
-          <CardHead>SUPPORTING PACK</CardHead>
-          <div className="cl">
-            <ClRow label="Cover letter" state={<StatusMark word="verified" />} />
-            <ClRow label="Itinerary" state={<StatusMark word="verified" />} />
-            <ClRow label="Proof of ties" state={<StatusMark word="verified" />} />
-          </div>
-          <CardFoot>+{output.oddsBoost as number} ODDS</CardFoot>
-        </Card>
-      );
-
-    case "bookAppointment": {
-      const whatToBring = (output.whatToBring as string[]) ?? [];
-      return (
-        <SlotBox
-          title={`Appointment found — ${output.date as string}, ${output.time as string}`}
-          calChip="▦ Add to calendar"
-        >
-          <div>{output.location as string}</div>
-          <div className="mono" style={{ fontSize: 10.5, fontWeight: 400, letterSpacing: "0.12em", marginTop: 3, color: "var(--ink2)" }}>
-            {output.confirmationCode as string}
-          </div>
-          {whatToBring.length > 0 && (
-            <div style={{ marginTop: 6, fontWeight: 400, fontSize: 11, lineHeight: 1.55, color: "var(--ink2)" }}>
-              {whatToBring.map((item) => (
-                <div key={item}>· {item}</div>
-              ))}
-            </div>
-          )}
-        </SlotBox>
-      );
-    }
-
-    case "trackEmbassyUpdates": {
-      const actionNeeded = Boolean(output.actionRequired) || output.status === "rfe_issued";
-      const rfeDetails = output.rfeDetails as { missingItem: string; explanation: string } | undefined;
-      const deadline = output.deadline as string | undefined;
-      if (actionNeeded) {
-        return (
-          <Card className="notam">
-            <CardHead>EMBASSY UPDATE — ACTION NEEDED</CardHead>
-            <div className="notam-body">
-              {rfeDetails ? (
-                <>
-                  <strong>{rfeDetails.missingItem}</strong>
-                  <div style={{ marginTop: 4, fontSize: 12.5, color: "var(--ink2)" }}>{rfeDetails.explanation}</div>
-                </>
-              ) : (output.message as string)}
-            </div>
-            {deadline ? <CardFoot>RESPOND BY {deadline}</CardFoot> : null}
-          </Card>
-        );
-      }
-      return (
-        <Card>
-          <CardHead>EMBASSY UPDATE</CardHead>
-          <div className="notam-body">
-            <span className="mono" style={{ fontSize: 9.5, letterSpacing: "0.16em", color: "var(--ink2)" }}>
-              {String(output.status ?? "").replace(/_/g, " ").toUpperCase()}
-            </span>
-            <div style={{ marginTop: 4 }}>{output.message as string}</div>
-          </div>
-        </Card>
-      );
-    }
-
-    case "trackDecision": {
-      const nextSteps = output.nextSteps as string | undefined;
-      if (output.decision === "approved") {
-        return (
-          <SlotBox title="● APPROVED">
-            {output.validityPeriod ? <div>Valid {output.validityPeriod as string}</div> : null}
-            {output.entries ? <div style={{ fontWeight: 400 }}>Entries: {String(output.entries)}</div> : null}
-            {nextSteps ? (
-              <div style={{ marginTop: 6, fontWeight: 400, fontSize: 11.5, lineHeight: 1.5, color: "var(--ink2)" }}>
-                {nextSteps}
-              </div>
-            ) : null}
-          </SlotBox>
-        );
-      }
-      if (output.decision === "refused") {
-        const refusalReasons = (output.refusalReasons as string[]) ?? [];
-        return (
-          <article className="card" style={{ borderLeft: "4px solid var(--clay)" }}>
-            <CardHead>DECISION</CardHead>
-            <div className="notam-body">
-              <StatusMark word="problem" />
-              {refusalReasons.map((reason, i) => (
-                <div key={i} className="poll-detail bad" style={{ marginTop: 4 }}>✕ {reason}</div>
-              ))}
-              {nextSteps ? (
-                <div style={{ marginTop: 6, fontSize: 12.5, color: "var(--ink2)" }}>{nextSteps}</div>
-              ) : null}
-            </div>
-          </article>
-        );
-      }
-      return (
-        <Card className="notam">
-          <CardHead>DECISION — ADDITIONAL PROCESSING</CardHead>
-          <div className="notam-body">
-            <StatusMark word="check" />
-            {nextSteps ? <div style={{ marginTop: 4 }}>{nextSteps}</div> : null}
-          </div>
-        </Card>
-      );
-    }
-
-    case "payFees":
-      return (
-        <Card>
-          <CardHead>FEES</CardHead>
-          <div className="cl">
-            <SageLine>● PAID · {output.paymentRef as string}</SageLine>
-          </div>
-        </Card>
-      );
-
-    case "submitFiling":
-      return (
-        <Card>
-          <MachinePanel
-            lines={[`REF: ${output.referenceNumber as string}`]}
-            final="APPLICATION SUBMITTED"
-            showRunway
-          />
-        </Card>
-      );
-
-    case "provideMissingInsurance":
-      return (
-        <Card>
-          <CardHead>RFE — INSURANCE REQUIRED</CardHead>
-          <div className="cl">
-            <SageLine>● POLICY VERIFIED</SageLine>
           </div>
         </Card>
       );
@@ -892,6 +588,22 @@ function ClientToolPart<T extends GermainClientToolName>({
           });
           break;
         }
+        case "uploadDocument": {
+          const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
+          onOutput({
+            tool: "uploadDocument", toolCallId: part.toolCallId,
+            output: {
+              uploaded: true,
+              document: {
+                id: `doc-${docType}-${Date.now()}`,
+                type: docType,
+                name: `${docType.replace(/_/g, " ")}.pdf`,
+                status: "uploaded" as const,
+              },
+            },
+          });
+          break;
+        }
         case "submitApplication":
           onOutput({
             tool: "submitApplication", toolCallId: part.toolCallId,
@@ -928,6 +640,36 @@ function ClientToolPart<T extends GermainClientToolName>({
                   success: true,
                   uploadedCount: documents.length,
                   documents,
+                },
+              });
+              setIsSubmitting(false);
+            }, 800);
+          }}
+        />
+      );
+    }
+
+    case "uploadDocument": {
+      const docType = isRecord(input) ? (input.documentType as string) ?? "document" : "document";
+      const reason = isRecord(input) ? (input.reason as string) ?? "" : "";
+      const guidanceText = isRecord(input) ? (input.guidance as string) ?? "" : "";
+      const isCritical = isRecord(input) ? Boolean(input.critical) : false;
+      return (
+        <SingleFileUpload
+          documentType={docType}
+          reason={reason}
+          guidance={guidanceText}
+          critical={isCritical}
+          isSubmitting={isSubmitting}
+          onUpload={(document) => {
+            setIsSubmitting(true);
+            setTimeout(() => {
+              onOutput({
+                tool: "uploadDocument",
+                toolCallId: part.toolCallId,
+                output: {
+                  uploaded: true,
+                  document,
                 },
               });
               setIsSubmitting(false);
