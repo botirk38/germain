@@ -28,7 +28,7 @@ export default function Home() {
               Security
             </a>
             <Show when="signed-in">
-              <Link className="key" href="/chat">
+              <Link className="key" href="/onboarding">
                 Open the console
               </Link>
               <UserButton />
@@ -63,7 +63,7 @@ export default function Home() {
             </p>
             <div className="cta">
               <Show when="signed-in">
-                <Link className="key" href="/chat">
+                <Link className="key" href="/onboarding">
                   Open the console
                 </Link>
               </Show>
@@ -274,7 +274,7 @@ export default function Home() {
           </p>
           <div className="cta">
             <Show when="signed-in">
-              <Link className="key" href="/chat">
+              <Link className="key" href="/onboarding">
                 Open the console
               </Link>
             </Show>

@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@clerk/backend": "^3.8.2",
     "@clerk/nextjs": "^7.5.7",
+    "@hookform/resolvers": "^5.4.0",
     "@neondatabase/serverless": "^1.1.0",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",
@@ -26,6 +28,7 @@
     "radix-ui": "^1.6.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-hook-form": "^7.80.0",
     "shadcn": "^4.11.0",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",

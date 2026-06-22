@@ -1,9 +1,10 @@
-import { clerkClient } from "@clerk/nextjs/server";
+import { createClerkClient } from "@clerk/backend";
 import { eveChannel } from "eve/channels/eve";
 import { localDev, UnauthenticatedError, type AuthFn } from "eve/channels/auth";
 import type { SessionAuthContext } from "eve/context";
 
 const MAX_TURNS_PER_MINUTE = 30;
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
 const rateLimitMap = new Map<string, number[]>();
 
@@ -36,8 +37,7 @@ function clerkAuth(): AuthFn<Request> {
       return null; // fall through to localDev if configured
     }
 
-    const client = await clerkClient();
-    const requestState = await client.authenticateRequest(request, {
+    const requestState = await clerkClient.authenticateRequest(request, {
       acceptsToken: "session_token",
     });
 

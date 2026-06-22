@@ -1,253 +1,127 @@
-"use client";
+import { auth } from "@clerk/nextjs/server";
+import { notFound, redirect } from "next/navigation";
+import { initialCaseState } from "@/components/attache/initial-states";
+import type { CaseState, Recommendation } from "@/components/attache/case-types";
+import { getVisaCaseProjection } from "@/lib/db/queries";
+import { VisaCaseClient } from "./visa-case-client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { useParams, useRouter } from "next/navigation";
-import type { InputResponse } from "eve/client";
-import { useAttacheAgent } from "../../chat/use-attache-agent";
-import { actionNeeded as caseActionNeeded, getDisplayStepIndex } from "@/components/attache/display";
-import { CaseFacts } from "@/components/console/CaseFacts";
-import { CaseStrip } from "@/components/console/CaseStrip";
-import { CautionLamp } from "@/components/console/CautionLamp";
-import { DocChecklist } from "@/components/console/DocChecklist";
-import { ProgressRoute } from "@/components/console/ProgressRoute";
-import { SplitFlap } from "@/components/console/SplitFlap";
-import { EmptyState } from "@/components/EmptyState";
-import { ChatMessages } from "@/components/ChatMessages";
-import { MonogramLogo } from "@/components/attache/MonogramLogo";
+type VisaCaseProjection = NonNullable<Awaited<ReturnType<typeof getVisaCaseProjection>>>;
 
-type UploadedDocument = {
-  readonly id: string;
-  readonly type: string;
-  readonly name: string;
-  readonly status: "uploaded";
-};
-
-function caseIdFromParam(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function hasPendingHumanInput(messages: ReturnType<typeof useAttacheAgent>["data"]["messages"]): boolean {
-  return messages.some(
-    (message) =>
-      message.role === "assistant" &&
-      message.parts.some((part) => part.type === "dynamic-tool" && part.state === "approval-requested"),
-  );
-}
-
-function documentsMessage(documents: readonly UploadedDocument[]): string {
-  const lines = documents.map((document) => `- ${document.type}: ${document.name}`).join("\n");
-  return `I uploaded these documents. Please call record_documents for them:\n${lines}`;
-}
-
-function loadCaseMessage(caseId: string): string {
-  return `Please call load_case for visa case ${caseId}, then continue my visa plan.`;
-}
-
-export default function VisaCasePage() {
-  const params = useParams<{ caseId: string }>();
-  const router = useRouter();
-  const caseId = caseIdFromParam(params.caseId);
-  const [input, setInput] = useState("");
-  const sentLoadCase = useRef(false);
-  const agent = useAttacheAgent();
-  const messages = agent.data.messages;
-  const caseState = agent.caseState;
-  const requestBusy = agent.status === "submitted" || agent.status === "streaming";
-  const pendingHumanInput = hasPendingHumanInput(messages);
-  const hasMessages = messages.length > 0;
-  const displayStepIndex = getDisplayStepIndex(caseState.status);
-  const actionNeeded = caseActionNeeded(caseState) || pendingHumanInput;
-
-  useEffect(() => {
-    if (!caseId || sentLoadCase.current || requestBusy || messages.length > 0) return;
-
-    sentLoadCase.current = true;
-    void agent
-      .send({
-        message: loadCaseMessage(caseId),
-        clientContext: { visaCaseId: caseId },
-      })
-      .catch(() => {
-        sentLoadCase.current = false;
-      });
-  }, [agent, caseId, messages.length, requestBusy]);
-
-  const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(event.target.value);
-  };
-
-  const sendText = (text: string) => {
-    if (!text.trim() || requestBusy) return;
-    void agent.send({ message: text });
-  };
-
-  const handleSuggestion = (text: string) => {
-    sendText(text);
-  };
-
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!input.trim() || requestBusy) return;
-    const text = input.trim();
-    setInput("");
-    sendText(text);
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    if (!input.trim() || requestBusy) return;
-    const text = input.trim();
-    setInput("");
-    sendText(text);
-  };
-
-  const handleDocuments = (documents: readonly UploadedDocument[]) => {
-    if (documents.length === 0 || requestBusy) return;
-    void agent.send({
-      message: documentsMessage(documents),
-      clientContext: {
-        uploadedDocuments: documents.map((document) => ({
-          type: document.type,
-          name: document.name,
-        })),
-      },
-    });
-  };
-
-  const handleInputResponse = (response: InputResponse) => {
-    if (requestBusy) return;
-    void agent.send({ inputResponses: [response] });
-  };
-
-  const handleNewCase = () => {
-    agent.reset();
-    router.push("/onboarding");
-  };
-
+function isRecommendation(value: unknown): value is Recommendation {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
   return (
-    <div className="flex h-dvh overflow-hidden">
-      <aside className="hidden min-[900px]:flex w-[280px] shrink-0 flex-col overflow-y-auto border-r border-line bg-panel-dk">
-        <div className="border-b border-line px-4 pb-4 pt-5">
-          <div className="flex items-center gap-3">
-            <MonogramLogo size={30} title="Attaché" />
-            <span className="wordmark">
-              <span className="rim" />
-              ATTACHÉ
-            </span>
-          </div>
-          <div className="mt-2 font-mono text-[8.5px] tracking-[0.26em] text-ink2">
-            AI VISA AGENT
-          </div>
-        </div>
-
-        <div className="flex flex-1 flex-col gap-3 p-3">
-          <CaseStrip caseState={caseState} />
-          <ProgressRoute currentIndex={displayStepIndex} />
-          <DocChecklist documents={caseState.documents} />
-          <CaseFacts caseState={caseState} />
-        </div>
-
-        <div className="border-t border-line p-3">
-          <button type="button" onClick={handleNewCase} className="btn w-full">
-            ↻ NEW CASE
-          </button>
-        </div>
-      </aside>
-
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
-          <div>
-            <SplitFlap status={caseState.status} />
-            <div className="flap-label" style={{ marginTop: 6 }}>
-              CASE STATUS
-            </div>
-          </div>
-          <div className="flex-1" />
-          <CautionLamp on={actionNeeded} />
-          {caseState.referenceNumber ? (
-            <div className="font-mono text-[10px] tracking-[0.14em] text-ink2">
-              REF <b className="text-ink">{caseState.referenceNumber}</b>
-            </div>
-          ) : null}
-        </header>
-
-        <section className="border-b border-line bg-panel-dk px-4 py-3 min-[900px]:hidden" aria-label="Case summary">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="font-mono text-[8.5px] uppercase tracking-[0.22em] text-ink2">Case route</div>
-              <div className="mt-1 text-sm font-semibold text-ink">
-                {caseState.destinationCountry || "Destination pending"}
-              </div>
-            </div>
-            <div className="text-right font-mono text-[9px] uppercase tracking-[0.14em] text-ink2">
-              {caseState.documents.length} docs
-            </div>
-          </div>
-          <div className="mt-3">
-            <ProgressRoute currentIndex={displayStepIndex} />
-          </div>
-        </section>
-
-        <div className="feed-wrap" style={{ background: "var(--bone)" }}>
-          {!hasMessages ? (
-            <EmptyState onSuggestion={handleSuggestion} />
-          ) : (
-            <ChatMessages
-              messages={messages}
-              status={agent.status}
-              onDocuments={handleDocuments}
-              onInputResponse={handleInputResponse}
-            />
-          )}
-        </div>
-
-        {agent.error ? (
-          <div style={{ background: "var(--bone)" }} className="px-5 pb-3">
-            <div
-              role="alert"
-              className="mx-auto flex max-w-[680px] items-center gap-3 px-3 py-2 font-mono text-[10.5px] tracking-[0.04em]"
-              style={{
-                background: "var(--tint-problem)",
-                border: "1px solid var(--clay)",
-              }}
-            >
-              <span style={{ color: "var(--clay)" }}>X Problem</span>
-              <span className="flex-1 text-ink2">{agent.error.message}</span>
-            </div>
-          </div>
-        ) : null}
-
-        <form onSubmit={handleSubmit} className="inputbar">
-          <div className="input-inner">
-            <textarea
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={requestBusy ? "Processing..." : pendingHumanInput ? "Approve or deny the pending action above..." : "Tell me about your trip..."}
-              aria-label="Message Attaché"
-              disabled={requestBusy || pendingHumanInput}
-              rows={1}
-              className="max-h-[200px] flex-1 resize-none border-none bg-transparent font-mono text-[11.5px] tracking-[0.06em] text-ink outline-none placeholder:text-ink2 placeholder:opacity-60 disabled:opacity-60"
-              onInput={(event) => {
-                const target = event.target as HTMLTextAreaElement;
-                target.style.height = "auto";
-                target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || requestBusy || pendingHumanInput}
-              className="ptt disabled:pointer-events-none disabled:opacity-45"
-            >
-              ▸ SEND
-            </button>
-          </div>
-          <div className="mx-auto mt-2 max-w-[680px] text-center font-mono text-[8.5px] tracking-[0.16em] text-ink2 opacity-70">
-            ENTER TO SEND · SHIFT+ENTER FOR NEW LINE
-          </div>
-        </form>
-      </main>
-    </div>
+    typeof candidate.id === "string" &&
+    typeof candidate.issue === "string" &&
+    typeof candidate.fix === "string" &&
+    typeof candidate.impact === "number" &&
+    typeof candidate.resolved === "boolean" &&
+    typeof candidate.category === "string"
   );
+}
+
+function recommendationsFromAssessment(value: unknown): readonly Recommendation[] {
+  return Array.isArray(value) ? value.filter(isRecommendation) : [];
+}
+
+function caseStateFromProjection(projection: VisaCaseProjection): CaseState {
+  const base = initialCaseState();
+  const { visaCase, intake, latestAssessment, documentRequirements, documents, candidateActions, caseSubmission, visibleEvents } = projection;
+
+  return {
+    ...base,
+    id: visaCase.id,
+    visaCaseId: visaCase.id,
+    visaType: latestAssessment?.visaType ?? base.visaType,
+    destinationCountry: visaCase.destinationCountry,
+    status: visaCase.internalStatus,
+    candidateStatus: visaCase.candidateStatus,
+    approvalLikelihood: latestAssessment?.approvalLikelihood ?? base.approvalLikelihood,
+    recommendations: recommendationsFromAssessment(latestAssessment?.recommendations),
+    applicant: {
+      ...base.applicant,
+      fullName: intake?.applicantFullName,
+      nationality: intake?.applicantNationality,
+      residenceCountry: intake?.applicantResidenceCountry,
+      residenceCity: intake?.applicantResidenceCity,
+      employmentStatus: intake?.applicantEmploymentStatus,
+      employer: intake?.applicantEmployer ?? undefined,
+      jobTitle: intake?.applicantJobTitle ?? undefined,
+      monthlyIncome: intake?.applicantMonthlyIncome ?? undefined,
+      propertyOwned: intake?.propertyOwned,
+      familyInHomeCountry: intake?.familyInHomeCountry,
+      previousRefusals: intake?.previousRefusals,
+    },
+    travel: {
+      ...base.travel,
+      purpose: visaCase.travelPurpose,
+      arrivalDate: intake?.arrivalDate,
+      departureDate: intake?.departureDate,
+      destinationCity: intake?.destinationCity ?? undefined,
+    },
+    documentRequirements: documentRequirements.map((requirement) => ({
+      id: requirement.id,
+      type: requirement.documentType,
+      label: requirement.label,
+      reason: requirement.reason,
+      guidance: requirement.guidance ?? undefined,
+      required: requirement.required,
+      status: requirement.status,
+    })),
+    documents: documents.map((document) => ({
+      id: document.id,
+      type: document.documentType,
+      name: document.originalFilename,
+      status: document.status,
+      storageKey: document.storageKey ?? undefined,
+    })),
+    candidateActions: candidateActions.map((action) => ({
+      id: action.id,
+      type: action.actionType,
+      status: action.status,
+      title: action.title,
+      description: action.description ?? undefined,
+      ctaLabel: action.ctaLabel ?? undefined,
+    })),
+    missingFields: latestAssessment?.missingFields ?? base.missingFields,
+    riskFlags: latestAssessment?.riskFlags ?? base.riskFlags,
+    referenceNumber: visaCase.referenceNumber ?? caseSubmission?.referenceNumber ?? undefined,
+    portalUrl: caseSubmission?.portalUrl ?? undefined,
+    browserUseSessionId: caseSubmission?.browserUseSessionId ?? undefined,
+    submissionPreview: caseSubmission?.liveViewUrl
+      ? {
+          liveViewUrl: caseSubmission.liveViewUrl,
+          status: caseSubmission.submissionStatus === "failed" ? "failed" : "partial",
+          formFieldsFilled: 0,
+          ...(caseSubmission.referenceNumber ? { referenceNumber: caseSubmission.referenceNumber } : {}),
+        }
+      : undefined,
+    timeline: visibleEvents.map((event) => ({
+      title: event.eventType.replace(/_/g, " "),
+      description: event.eventType.replace(/_/g, " "),
+      time: event.createdAt.toISOString(),
+      status: "complete",
+    })),
+  };
+}
+
+export default async function VisaCasePage({ params }: { readonly params: Promise<{ readonly caseId: string }> }) {
+  const { caseId } = await params;
+  const { userId, orgId } = await auth();
+
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  const projection = await getVisaCaseProjection({
+    clerkUserId: userId,
+    clerkOrgId: orgId,
+    visaCaseId: caseId,
+  });
+
+  if (!projection) {
+    notFound();
+  }
+
+  return <VisaCaseClient caseId={caseId} initialCaseState={caseStateFromProjection(projection)} />;
 }

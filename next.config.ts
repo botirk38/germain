@@ -1,10 +1,8 @@
-import type { NextConfig } from "next";
 import { withEve } from "eve/next";
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
 };
 
-export default withEve(nextConfig, {
-  eveRoot: "lib/attache",
-});
+export default withEve(nextConfig);
