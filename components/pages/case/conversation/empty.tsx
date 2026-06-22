@@ -3,7 +3,7 @@
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { StatusMark } from "@/components/attache/StatusMark";
 import type { StatusWord } from "@/components/attache/display";
-import { Button } from "@/components/ui/button";
+import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 
 interface EmptyStateProps {
@@ -58,20 +58,18 @@ export function EmptyState({ onSuggestion }: EmptyStateProps) {
       </EmptyHeader>
 
       <EmptyContent>
-        <div className="flex flex-wrap justify-center gap-2">
+        <Suggestions className="justify-center">
           {SUGGESTIONS.map((suggestion, index) => (
-            <Button
+            <Suggestion
               key={index}
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onSuggestion(suggestion.value)}
+              suggestion={suggestion.value}
+              onClick={onSuggestion}
               className="chip h-auto"
             >
               {suggestion.text}
-            </Button>
+            </Suggestion>
           ))}
-        </div>
+        </Suggestions>
 
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-line pt-4">
           {VOCAB_WORDS.map((word) => (

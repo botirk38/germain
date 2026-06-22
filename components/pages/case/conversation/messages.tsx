@@ -2,7 +2,12 @@
 
 import type { EveMessage, InputResponse } from "eve/client";
 import { Fragment } from "react";
-import { Markdown } from "@/components/attache/Markdown";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { DynamicToolPart } from "./tool-card";
 
 type UploadedDocument = {
@@ -35,56 +40,59 @@ function hasVisibleContent(message: EveMessage): boolean {
 
 export function ChatMessages({ messages, status, onDocuments, onInputResponse }: ChatMessagesProps) {
   return (
-    <div className="feed">
-      {messages.map((message) => (
-        <Fragment key={message.id}>
-          {message.role === "user" ? (
-            <div className="msg user">
-              <div className="bubble">{userText(message)}</div>
-            </div>
-          ) : null}
+    <Conversation className="h-full">
+      <ConversationContent className="feed gap-0 p-0">
+        {messages.map((message) => (
+          <Fragment key={message.id}>
+            {message.role === "user" ? (
+              <Message from="user" className="msg user max-w-none">
+                <MessageContent className="bubble">{userText(message)}</MessageContent>
+              </Message>
+            ) : null}
 
-          {message.role === "assistant" && hasVisibleContent(message) ? (
-            <div className="msg">
-              <div className="callsign" aria-hidden="true">
-                A
-              </div>
-              <div className="body">
-                {message.parts.map((part, index) => {
-                  const key = `${message.id}-${index}`;
-                  if (part.type === "text") {
-                    return part.text ? <Markdown key={key} text={part.text} /> : null;
-                  }
-                  if (part.type === "dynamic-tool") {
-                    return (
-                      <DynamicToolPart
-                        key={key}
-                        part={part}
-                        onDocuments={onDocuments}
-                        onInputResponse={onInputResponse}
-                      />
-                    );
-                  }
-                  return null;
-                })}
-              </div>
-            </div>
-          ) : null}
-        </Fragment>
-      ))}
+            {message.role === "assistant" && hasVisibleContent(message) ? (
+              <Message from="assistant" className="msg max-w-none">
+                <div className="callsign" aria-hidden="true">
+                  A
+                </div>
+                <MessageContent className="body w-full">
+                  {message.parts.map((part, index) => {
+                    const key = `${message.id}-${index}`;
+                    if (part.type === "text") {
+                      return part.text ? <MessageResponse key={key} className="sd">{part.text}</MessageResponse> : null;
+                    }
+                    if (part.type === "dynamic-tool") {
+                      return (
+                        <DynamicToolPart
+                          key={key}
+                          part={part}
+                          onDocuments={onDocuments}
+                          onInputResponse={onInputResponse}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                </MessageContent>
+              </Message>
+            ) : null}
+          </Fragment>
+        ))}
 
-      {status === "streaming" ? (
-        <div className="msg typing">
-          <div className="callsign" aria-hidden="true">
-            A
-          </div>
-          <div className="body">
-            <span className="t">
-              ATTACHE IS TYPING <span className="cursor">▌</span>
-            </span>
-          </div>
-        </div>
-      ) : null}
-    </div>
+        {status === "streaming" ? (
+          <Message from="assistant" className="msg typing max-w-none">
+            <div className="callsign" aria-hidden="true">
+              A
+            </div>
+            <MessageContent className="body w-full">
+              <span className="t">
+                ATTACHE IS TYPING <span className="cursor">▌</span>
+              </span>
+            </MessageContent>
+          </Message>
+        ) : null}
+      </ConversationContent>
+      <ConversationScrollButton className="border-line bg-[var(--bone)] text-ink hover:bg-[var(--tint)]" />
+    </Conversation>
   );
 }
