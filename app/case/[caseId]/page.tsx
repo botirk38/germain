@@ -2,8 +2,8 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import { initialCaseState } from "@/components/attache/initial-states";
 import type { CaseState, Recommendation } from "@/components/attache/case-types";
+import { CaseComposer, CaseConversation, CaseError, CaseHeader, CaseMobileSummary, CasePageProvider, CaseSidebar } from "@/components/pages/case/case-page";
 import { getVisaCaseProjection } from "@/lib/db/queries";
-import { VisaCaseClient } from "@/components/pages/case/visa-case-client";
 
 type VisaCaseProjection = NonNullable<Awaited<ReturnType<typeof getVisaCaseProjection>>>;
 
@@ -123,5 +123,18 @@ export default async function VisaCasePage({ params }: { readonly params: Promis
     notFound();
   }
 
-  return <VisaCaseClient caseId={caseId} initialCaseState={caseStateFromProjection(projection)} />;
+  return (
+    <CasePageProvider caseId={caseId} initialCaseState={caseStateFromProjection(projection)}>
+      <div className="flex h-dvh overflow-hidden">
+        <CaseSidebar />
+        <main className="flex min-w-0 flex-1 flex-col">
+          <CaseHeader />
+          <CaseMobileSummary />
+          <CaseConversation />
+          <CaseError />
+          <CaseComposer />
+        </main>
+      </div>
+    </CasePageProvider>
+  );
 }
