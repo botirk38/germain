@@ -3,6 +3,7 @@ import { always } from "eve/tools/approval";
 import { BrowserUse } from "browser-use-sdk/v3";
 import { z } from "zod";
 import { z as browserZ } from "zod/v4";
+import { appendEvent, updateVisaCase, upsertSubmission } from "@/lib/db/queries";
 import { caseState } from "../lib/state";
 
 const browserSubmissionConfirmationSchema = browserZ.object({
@@ -47,10 +48,18 @@ export default defineTool({
   inputSchema,
   outputSchema,
   needsApproval: always(),
-  async execute() {
+  async execute(_input, ctx) {
     const state = caseState.get();
+    const userId = ctx.session.auth.current?.attributes.userId;
+    const orgId = ctx.session.auth.current?.attributes.orgId;
 
-    if (state.status !== "preparing_submission") {
+    if (typeof userId !== "string") {
+      throw new Error("No authenticated user found for this Eve session.");
+    }
+    if (!state.visaCaseId) {
+      throw new Error("No loaded visa case found. Call load_case first.");
+    }
+    if (state.status !== "portal_draft_ready" && state.status !== "final_submission_requested") {
       throw new Error("The application is not ready for final submission. Prepare and review it first.");
     }
     if (!state.browserUseSessionId) {
@@ -60,6 +69,25 @@ export default defineTool({
       throw new Error("No successful submission preview exists. Review the portal draft before submitting.");
     }
 
+    const owner = {
+      clerkUserId: userId,
+      clerkOrgId: typeof orgId === "string" ? orgId : null,
+      visaCaseId: state.visaCaseId,
+    };
+
+    await updateVisaCase(owner, {
+      internalStatus: "final_submission_requested",
+      candidateStatus: "waiting_for_approval",
+    });
+    await upsertSubmission(owner, {
+      submissionStatus: "approved_for_submit",
+    });
+    await appendEvent(owner, state.visaCaseId, {
+      eventType: "final_submission_approved",
+      fromStatus: state.status,
+      toStatus: "final_submission_requested",
+    });
+
     const { referenceNumber, submitted } = await finalizeSubmission(state.browserUseSessionId);
 
     if (!submitted) {
@@ -67,6 +95,26 @@ export default defineTool({
     }
 
     const now = new Date().toISOString();
+
+    await upsertSubmission(owner, {
+      submissionStatus: "submitted",
+      referenceNumber,
+      submittedAt: new Date(),
+      browserUseSessionId: null,
+      submissionResult: { submitted: true, referenceNumber },
+    });
+    await updateVisaCase(owner, {
+      internalStatus: "submitted",
+      candidateStatus: "submitted",
+      referenceNumber,
+    });
+    await appendEvent(owner, state.visaCaseId, {
+      eventType: "application_submitted",
+      fromStatus: "final_submission_requested",
+      toStatus: "submitted",
+      visibleToCandidate: true,
+      payload: { referenceNumber },
+    });
 
     caseState.update((s) => ({
       ...s,

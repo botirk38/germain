@@ -2,20 +2,41 @@ import { defineState } from "eve/context";
 import { z } from "zod";
 
 export const caseStatusSchema = z.enum([
-  "intake",
-  "route_selected",
-  "checklist_ready",
-  "documents_reviewed",
-  "form_ready",
-  "pack_ready",
-  "review_passed",
-  "appointment_set",
-  "fees_paid",
-  "preparing_submission",
+  "intake_started",
+  "intake_completed",
+  "route_assessed",
+  "checklist_generated",
+  "documents_requested",
+  "documents_partially_received",
+  "documents_received",
+  "document_review_in_progress",
+  "document_review_failed",
+  "document_review_passed",
+  "case_strengthening",
+  "application_pack_prepared",
+  "portal_draft_requested",
+  "portal_draft_ready",
+  "final_submission_requested",
   "submitted",
-  "awaiting_biometrics",
+  "biometrics_requested",
+  "additional_documents_requested",
   "processing",
   "decision_ready",
+  "closed",
+]);
+
+export const candidateStatusSchema = z.enum([
+  "getting_started",
+  "building_plan",
+  "waiting_for_documents",
+  "reviewing_documents",
+  "strengthening_case",
+  "preparing_application",
+  "waiting_for_approval",
+  "submitted",
+  "monitoring_decision",
+  "action_needed",
+  "completed",
 ]);
 
 export const employmentStatusSchema = z.enum([
@@ -50,39 +71,29 @@ export const documentTypeSchema = z.enum([
 ]);
 
 export const documentStatusSchema = z.enum([
-  "missing",
   "requested",
   "uploaded",
+  "processing",
   "needs_review",
   "verified",
   "rejected",
 ]);
 
-export const profileFieldSchema = z.object({
-  fullName: z.string().trim().min(1).max(160).optional(),
-  nationality: z.string().trim().min(1).max(80).optional(),
-  residenceCountry: z.string().trim().min(1).max(80).optional(),
-  residenceCity: z.string().trim().min(1).max(80).optional(),
-  employmentStatus: employmentStatusSchema.optional(),
-  employer: z.string().trim().min(1).max(160).optional(),
-  jobTitle: z.string().trim().min(1).max(120).optional(),
-  monthlyIncome: z.number().min(0).max(1_000_000).optional(),
-  destinationCountry: z.string().trim().min(1).max(80).optional(),
-  purpose: travelPurposeSchema.optional(),
-  arrivalDate: z.string().date().optional(),
-  departureDate: z.string().date().optional(),
-  destinationCity: z.string().trim().min(1).max(80).optional(),
-  familyInHomeCountry: z.boolean().optional(),
-  propertyOwned: z.boolean().optional(),
-  previousRefusals: z.boolean().optional(),
-});
-
 export type CaseStatus = z.infer<typeof caseStatusSchema>;
+export type CandidateStatus = z.infer<typeof candidateStatusSchema>;
 export type DocumentType = z.infer<typeof documentTypeSchema>;
 export type DocumentStatus = z.infer<typeof documentStatusSchema>;
 export type EmploymentStatus = z.infer<typeof employmentStatusSchema>;
 export type TravelPurpose = z.infer<typeof travelPurposeSchema>;
-export type ProfileFields = z.infer<typeof profileFieldSchema>;
+
+export type CandidateAction = {
+  readonly id: string;
+  readonly type: string;
+  readonly status: "open" | "completed" | "cancelled";
+  readonly title: string;
+  readonly description?: string;
+  readonly ctaLabel?: string;
+};
 
 export type Document = {
   readonly id: string;
@@ -90,8 +101,18 @@ export type Document = {
   readonly name: string;
   readonly status: DocumentStatus;
   readonly storageKey?: string;
-  readonly extractedData?: Record<string, string>;
+  readonly extractedData?: Record<string, unknown>;
   readonly riskFlags?: readonly string[];
+};
+
+export type DocumentRequirement = {
+  readonly id: string;
+  readonly type: DocumentType;
+  readonly label: string;
+  readonly reason: string;
+  readonly guidance?: string;
+  readonly required: boolean;
+  readonly status: "requested" | "satisfied" | "waived" | "rejected";
 };
 
 export type TimelineEvent = {
@@ -103,9 +124,11 @@ export type TimelineEvent = {
 
 export type CaseState = {
   readonly id: string;
+  readonly visaCaseId?: string;
   readonly visaType: string;
   readonly destinationCountry: string;
   readonly status: CaseStatus;
+  readonly candidateStatus: CandidateStatus;
   readonly approvalLikelihood: number;
   readonly recommendations: readonly unknown[];
   readonly applicant: {
@@ -133,7 +156,9 @@ export type CaseState = {
     readonly previousVisits?: number;
   };
   readonly financials: Record<string, unknown>;
+  readonly documentRequirements: readonly DocumentRequirement[];
   readonly documents: readonly Document[];
+  readonly candidateActions: readonly CandidateAction[];
   readonly missingFields: readonly string[];
   readonly riskFlags: readonly string[];
   readonly formCompletion: number;
@@ -170,24 +195,21 @@ export type CaseState = {
   readonly timeline: readonly TimelineEvent[];
 };
 
-export type OnboardingState = {
-  readonly collectedFields: ProfileFields;
-  readonly requestedDocuments: readonly DocumentType[];
-  readonly completed: boolean;
-};
-
 export function initialCaseState(): CaseState {
   return {
     id: `case-${Date.now()}`,
     visaType: "",
     destinationCountry: "",
-    status: "intake",
+    status: "intake_started",
+    candidateStatus: "getting_started",
     approvalLikelihood: 35,
     recommendations: [],
     applicant: {},
     travel: {},
     financials: {},
+    documentRequirements: [],
     documents: [],
+    candidateActions: [],
     missingFields: [],
     riskFlags: [],
     formCompletion: 0,
@@ -198,24 +220,4 @@ export function initialCaseState(): CaseState {
   };
 }
 
-export function initialOnboardingState(): OnboardingState {
-  return { collectedFields: {}, requestedDocuments: [], completed: false };
-}
-
 export const caseState = defineState<CaseState>("attache.case", initialCaseState);
-export const onboardingState = defineState<OnboardingState>("attache.onboarding", initialOnboardingState);
-
-export function missingRequiredFields(profile: ProfileFields): string[] {
-  const required: Array<keyof ProfileFields> = [
-    "fullName",
-    "nationality",
-    "residenceCountry",
-    "residenceCity",
-    "employmentStatus",
-    "destinationCountry",
-    "purpose",
-    "arrivalDate",
-    "departureDate",
-  ];
-  return required.filter((key) => profile[key] === undefined || profile[key] === null || profile[key] === "");
-}

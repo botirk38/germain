@@ -24,10 +24,10 @@ type DynamicToolPartProps = {
 type JsonRecord = Record<string, unknown>;
 
 const toolHeaders: Record<string, string> = {
+  load_case: "CASE LOADED",
   prepare_submission: "PREPARE SUBMISSION",
   record_documents: "DOCUMENTS RECEIVED",
   request_documents: "UPLOAD REQUIRED",
-  save_profile: "PROFILE SAVED",
   submit_application: "SUBMIT APPLICATION",
 };
 
@@ -249,12 +249,12 @@ function ServerToolOutput({
         </Card>
       );
 
-    case "save_profile":
+    case "load_case":
       return (
         <Card>
           <CardHead>{headerFor(toolName)}</CardHead>
           <div className="cl">
-            <ClRow label="Profile" state={<StatusMark word="verified" />} />
+            <ClRow label="Visa case" state={<StatusMark word="verified" />} />
           </div>
         </Card>
       );

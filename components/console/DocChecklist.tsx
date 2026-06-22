@@ -3,9 +3,9 @@ import { StatusMark } from "@/components/attache/StatusMark";
 import { docStatusWord } from "@/components/attache/display";
 
 const DOC_LAMP_STATE: Record<Document["status"], string> = {
-  missing: "pending",
   requested: "pending",
   uploaded: "received",
+  processing: "pending",
   needs_review: "caution",
   verified: "go",
   rejected: "fail",

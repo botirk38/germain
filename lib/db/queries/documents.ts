@@ -1,0 +1,117 @@
+import { eq } from "drizzle-orm";
+import { getDb, schema } from "../index";
+import { appendEvent } from "./events";
+import { createCandidateAction } from "./tasks";
+import { getVisaCase, getVisaCaseProjection, updateVisaCase } from "./visa-cases";
+
+type DbOwner = Pick<typeof schema.visaCases.$inferInsert, "clerkUserId" | "clerkOrgId">;
+type OwnedVisaCase = DbOwner & { readonly visaCaseId: typeof schema.visaCases.$inferSelect.id };
+
+function requirementLabel(type: typeof schema.documentTypeEnum.enumValues[number]): string {
+  return type
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export async function createDocumentRequirements(
+  owner: OwnedVisaCase,
+  requirements: readonly {
+    readonly documentType: typeof schema.documentTypeEnum.enumValues[number];
+    readonly reason: string;
+    readonly guidance?: string;
+    readonly required?: boolean;
+  }[],
+) {
+  const visaCase = await getVisaCase(owner);
+  if (!visaCase) return [];
+
+  const db = getDb();
+  const inserted = await db
+    .insert(schema.documentRequirements)
+    .values(
+      requirements.map((requirement) => ({
+        visaCaseId: visaCase.id,
+        documentType: requirement.documentType,
+        label: requirementLabel(requirement.documentType),
+        reason: requirement.reason,
+        guidance: requirement.guidance,
+        required: requirement.required ?? true,
+        criticality: requirement.required === false ? "recommended" : "required",
+      })),
+    )
+    .returning();
+
+  await updateVisaCase(owner, {
+    internalStatus: "documents_requested",
+    candidateStatus: "waiting_for_documents",
+  });
+  await appendEvent(owner, visaCase.id, {
+    eventType: "documents_requested",
+    fromStatus: visaCase.internalStatus,
+    toStatus: "documents_requested",
+    visibleToCandidate: true,
+    payload: { documentTypes: inserted.map((requirement) => requirement.documentType) },
+  });
+  await createCandidateAction(owner, visaCase.id, {
+    actionType: "upload_documents",
+    title: "Upload requested documents",
+    description: "Attaché needs these documents to continue reviewing your visa case.",
+    ctaLabel: "Record documents",
+    payload: { requirementIds: inserted.map((requirement) => requirement.id) },
+  });
+
+  return inserted;
+}
+
+export async function recordDocument(
+  owner: OwnedVisaCase,
+  document: {
+    readonly documentType: typeof schema.documentTypeEnum.enumValues[number];
+    readonly originalFilename: string;
+    readonly storageKey?: string;
+  },
+) {
+  const projection = await getVisaCaseProjection(owner);
+  if (!projection) return null;
+
+  const matchingRequirement = projection.documentRequirements.find(
+    (requirement) => requirement.documentType === document.documentType && requirement.status === "requested",
+  );
+
+  const db = getDb();
+  const [created] = await db
+    .insert(schema.documents)
+    .values({
+      visaCaseId: projection.visaCase.id,
+      requirementId: matchingRequirement?.id,
+      uploadedByClerkUserId: owner.clerkUserId,
+      documentType: document.documentType,
+      originalFilename: document.originalFilename,
+      storageKey: document.storageKey,
+      metadata: { metadataOnly: !document.storageKey },
+    })
+    .returning();
+
+  if (matchingRequirement) {
+    await db
+      .update(schema.documentRequirements)
+      .set({ status: "satisfied", updatedAt: new Date() })
+      .where(eq(schema.documentRequirements.id, matchingRequirement.id));
+  }
+
+  const remainingRequirements = projection.documentRequirements.filter(
+    (requirement) => requirement.id !== matchingRequirement?.id && requirement.status === "requested",
+  );
+  await updateVisaCase(owner, {
+    internalStatus: remainingRequirements.length === 0 ? "documents_received" : "documents_partially_received",
+    candidateStatus: remainingRequirements.length === 0 ? "reviewing_documents" : "waiting_for_documents",
+  });
+  await appendEvent(owner, projection.visaCase.id, {
+    eventType: "document_recorded",
+    visibleToCandidate: true,
+    payload: { documentType: created.documentType, originalFilename: created.originalFilename },
+  });
+
+  return created;
+}

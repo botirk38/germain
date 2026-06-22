@@ -1,17 +1,20 @@
-import type { CaseState, OnboardingState } from "./case-types";
+import type { CaseState } from "./case-types";
 
 export function initialCaseState(): CaseState {
   return {
     id: `case-${Date.now()}`,
     visaType: "",
     destinationCountry: "",
-    status: "intake",
+    status: "intake_started",
+    candidateStatus: "getting_started",
     approvalLikelihood: 35,
     recommendations: [],
     applicant: {},
     travel: {},
     financials: {},
+    documentRequirements: [],
     documents: [],
+    candidateActions: [],
     missingFields: [],
     riskFlags: [],
     formCompletion: 0,
@@ -25,13 +28,5 @@ export function initialCaseState(): CaseState {
     },
     embassyFollowUps: [],
     timeline: [],
-  };
-}
-
-export function initialOnboardingState(): OnboardingState {
-  return {
-    collectedFields: {},
-    requestedDocuments: [],
-    completed: false,
   };
 }

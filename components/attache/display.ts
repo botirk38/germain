@@ -1,28 +1,35 @@
 import type { CaseState } from "./case-types";
 
 export const DISPLAY_STEPS = [
+  "Plan",
   "Documents",
   "Review",
-  "Appointment",
-  "Submitted",
+  "Submit",
   "Decision",
 ] as const;
 
 const STATUS_TO_DISPLAY_STEP: Record<CaseState["status"], number> = {
-  intake: 0,
-  route_selected: 0,
-  checklist_ready: 0,
-  documents_reviewed: 1,
-  form_ready: 1,
-  pack_ready: 1,
-  review_passed: 1,
-  appointment_set: 2,
-  fees_paid: 2,
-  preparing_submission: 2,
+  intake_started: 0,
+  intake_completed: 0,
+  route_assessed: 0,
+  checklist_generated: 0,
+  documents_requested: 1,
+  documents_partially_received: 1,
+  documents_received: 1,
+  document_review_in_progress: 2,
+  document_review_failed: 2,
+  document_review_passed: 2,
+  case_strengthening: 2,
+  application_pack_prepared: 3,
+  portal_draft_requested: 3,
+  portal_draft_ready: 3,
+  final_submission_requested: 3,
   submitted: 3,
-  awaiting_biometrics: 3,
-  processing: 3,
+  biometrics_requested: 4,
+  additional_documents_requested: 4,
+  processing: 4,
   decision_ready: 4,
+  closed: 4,
 };
 
 export function getDisplayStepIndex(status: CaseState["status"]): number {
@@ -53,11 +60,10 @@ export const STATUS_WORD_META: Record<
 
 export function docStatusWord(s: CaseState["documents"][number]["status"]): StatusWord {
   switch (s) {
-    case "missing":
-      return "missing";
     case "requested":
       return "waiting";
     case "uploaded":
+    case "processing":
       return "received";
     case "needs_review":
       return "check";
@@ -82,20 +88,27 @@ export function reviewStatusWord(
 }
 
 const SPLIT_FLAP_WORDS: Record<CaseState["status"], string> = {
-  intake: "INTAKE",
-  route_selected: "CHECKLIST",
-  checklist_ready: "CHECKLIST",
-  documents_reviewed: "REVIEWING",
-  form_ready: "PREPARING",
-  pack_ready: "PREPARING",
-  review_passed: "READY",
-  appointment_set: "BOOKED",
-  fees_paid: "FEES PAID",
-  preparing_submission: "PREPARING",
+  intake_started: "INTAKE",
+  intake_completed: "PLANNING",
+  route_assessed: "PLAN READY",
+  checklist_generated: "CHECKLIST",
+  documents_requested: "DOCS NEEDED",
+  documents_partially_received: "DOCS NEEDED",
+  documents_received: "DOCS IN",
+  document_review_in_progress: "REVIEWING",
+  document_review_failed: "ACTION NEEDED",
+  document_review_passed: "REVIEWED",
+  case_strengthening: "STRENGTHEN",
+  application_pack_prepared: "PACK READY",
+  portal_draft_requested: "PORTAL",
+  portal_draft_ready: "APPROVE",
+  final_submission_requested: "APPROVE",
   submitted: "SUBMITTED",
-  awaiting_biometrics: "FOLLOW-UP",
+  biometrics_requested: "BIOMETRICS",
+  additional_documents_requested: "ACTION NEEDED",
   processing: "PROCESSING",
   decision_ready: "DECISION",
+  closed: "CLOSED",
 };
 
 export function splitFlapWord(status: CaseState["status"]): string {
@@ -103,5 +116,6 @@ export function splitFlapWord(status: CaseState["status"]): string {
 }
 
 export function actionNeeded(state: CaseState): boolean {
-  return state.embassyFollowUps.some((f) => f.type === "rfe" && !f.responded);
+  return state.candidateActions.some((action) => action.status === "open") ||
+    state.embassyFollowUps.some((f) => f.type === "rfe" && !f.responded);
 }

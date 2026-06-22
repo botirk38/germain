@@ -1,18 +1,38 @@
 export type CaseStatus =
-  | "intake"
-  | "route_selected"
-  | "checklist_ready"
-  | "documents_reviewed"
-  | "form_ready"
-  | "pack_ready"
-  | "review_passed"
-  | "appointment_set"
-  | "fees_paid"
-  | "preparing_submission"
+  | "intake_started"
+  | "intake_completed"
+  | "route_assessed"
+  | "checklist_generated"
+  | "documents_requested"
+  | "documents_partially_received"
+  | "documents_received"
+  | "document_review_in_progress"
+  | "document_review_failed"
+  | "document_review_passed"
+  | "case_strengthening"
+  | "application_pack_prepared"
+  | "portal_draft_requested"
+  | "portal_draft_ready"
+  | "final_submission_requested"
   | "submitted"
-  | "awaiting_biometrics"
+  | "biometrics_requested"
+  | "additional_documents_requested"
   | "processing"
-  | "decision_ready";
+  | "decision_ready"
+  | "closed";
+
+export type CandidateStatus =
+  | "getting_started"
+  | "building_plan"
+  | "waiting_for_documents"
+  | "reviewing_documents"
+  | "strengthening_case"
+  | "preparing_application"
+  | "waiting_for_approval"
+  | "submitted"
+  | "monitoring_decision"
+  | "action_needed"
+  | "completed";
 
 export type DocumentType =
   | "passport"
@@ -28,9 +48,9 @@ export type DocumentType =
   | "birth_certificate";
 
 export type DocumentStatus =
-  | "missing"
   | "requested"
   | "uploaded"
+  | "processing"
   | "needs_review"
   | "verified"
   | "rejected";
@@ -68,13 +88,32 @@ export type Recommendation = {
   readonly category: RecommendationCategory;
 };
 
+export type CandidateAction = {
+  readonly id: string;
+  readonly type: string;
+  readonly status: "open" | "completed" | "cancelled";
+  readonly title: string;
+  readonly description?: string;
+  readonly ctaLabel?: string;
+};
+
+export type DocumentRequirement = {
+  readonly id: string;
+  readonly type: DocumentType;
+  readonly label: string;
+  readonly reason: string;
+  readonly guidance?: string;
+  readonly required: boolean;
+  readonly status: "requested" | "satisfied" | "waived" | "rejected";
+};
+
 export type Document = {
   readonly id: string;
   readonly type: DocumentType;
   readonly name: string;
   readonly status: DocumentStatus;
   readonly storageKey?: string;
-  readonly extractedData?: Record<string, string>;
+  readonly extractedData?: Record<string, unknown>;
   readonly riskFlags?: readonly string[];
 };
 
@@ -94,9 +133,11 @@ export type FollowUp = {
 
 export type CaseState = {
   readonly id: string;
+  readonly visaCaseId?: string;
   readonly visaType: string;
   readonly destinationCountry: string;
   readonly status: CaseStatus;
+  readonly candidateStatus: CandidateStatus;
   readonly approvalLikelihood: number;
   readonly recommendations: readonly Recommendation[];
   readonly applicant: {
@@ -129,7 +170,9 @@ export type CaseState = {
     readonly coverageRatio?: number;
     readonly salaryCreditsConsistent?: boolean;
   };
+  readonly documentRequirements: readonly DocumentRequirement[];
   readonly documents: readonly Document[];
+  readonly candidateActions: readonly CandidateAction[];
   readonly missingFields: readonly string[];
   readonly riskFlags: readonly string[];
   readonly formCompletion: number;
@@ -183,10 +226,4 @@ export type ProfileFields = {
   readonly familyInHomeCountry?: boolean;
   readonly propertyOwned?: boolean;
   readonly previousRefusals?: boolean;
-};
-
-export type OnboardingState = {
-  readonly collectedFields: ProfileFields;
-  readonly requestedDocuments: readonly DocumentType[];
-  readonly completed: boolean;
 };

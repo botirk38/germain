@@ -9,10 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 
-const PROFILE_STORAGE_KEY = "attache:onboarding-profile";
-const EVE_SESSION_STORAGE_KEY = "attache:eve-session";
-const PROFILE_STORAGE_VERSION = 1;
-
 const purposeOptions = [
   { label: "Tourism", value: "tourism" },
   { label: "Business", value: "business" },
@@ -68,20 +64,20 @@ const initialForm: FormState = {
   previousRefusals: false,
 };
 
-function toProfile(form: FormState): Record<string, string | number | boolean> {
+function toOnboardingPayload(form: FormState): Record<string, string | number | boolean> {
   const monthlyIncome = Number(form.monthlyIncome);
   return {
-    fullName: form.fullName.trim(),
-    nationality: form.nationality.trim(),
-    residenceCountry: form.residenceCountry.trim(),
-    residenceCity: form.residenceCity.trim(),
-    employmentStatus: form.employmentStatus,
-    ...(form.employer.trim() ? { employer: form.employer.trim() } : {}),
-    ...(form.jobTitle.trim() ? { jobTitle: form.jobTitle.trim() } : {}),
-    ...(Number.isFinite(monthlyIncome) && monthlyIncome > 0 ? { monthlyIncome } : {}),
+    applicantFullName: form.fullName.trim(),
+    applicantNationality: form.nationality.trim(),
+    applicantResidenceCountry: form.residenceCountry.trim(),
+    applicantResidenceCity: form.residenceCity.trim(),
+    applicantEmploymentStatus: form.employmentStatus,
+    ...(form.employer.trim() ? { applicantEmployer: form.employer.trim() } : {}),
+    ...(form.jobTitle.trim() ? { applicantJobTitle: form.jobTitle.trim() } : {}),
+    ...(Number.isFinite(monthlyIncome) && monthlyIncome > 0 ? { applicantMonthlyIncome: monthlyIncome } : {}),
     destinationCountry: form.destinationCountry.trim(),
     ...(form.destinationCity.trim() ? { destinationCity: form.destinationCity.trim() } : {}),
-    purpose: form.purpose,
+    travelPurpose: form.purpose,
     arrivalDate: form.arrivalDate,
     departureDate: form.departureDate,
     familyInHomeCountry: form.familyInHomeCountry,
@@ -127,6 +123,8 @@ function MiniCard({ label, value }: { readonly label: string; readonly value: st
 export default function OnboardingPage() {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(initialForm);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | undefined>();
   const canSubmit = requiredComplete(form);
 
   const updateText = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -137,16 +135,31 @@ export default function OnboardingPage() {
     setForm((current) => ({ ...current, [field]: event.target.checked }));
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || isSubmitting) return;
 
-    window.localStorage.removeItem(EVE_SESSION_STORAGE_KEY);
-    window.sessionStorage.setItem(
-      PROFILE_STORAGE_KEY,
-      JSON.stringify({ version: PROFILE_STORAGE_VERSION, createdAt: Date.now(), profile: toProfile(form) }),
-    );
-    router.push("/chat");
+    setIsSubmitting(true);
+    setError(undefined);
+
+    try {
+      const response = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(toOnboardingPayload(form)),
+      });
+
+      const body: unknown = await response.json();
+      if (!response.ok || typeof body !== "object" || body === null || !("visaCaseId" in body) || typeof body.visaCaseId !== "string") {
+        throw new Error("Could not create your visa case. Please check the form and try again.");
+      }
+
+      router.push(`/case/${body.visaCaseId}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not create your visa case.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -278,11 +291,14 @@ export default function OnboardingPage() {
           </div>
 
           <div className="mt-7 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-5 text-ink2">
-              You can edit details with Attaché later. Departure must be after arrival.
-            </p>
-            <Button type="submit" disabled={!canSubmit} size="lg" className="bg-brass text-white hover:bg-brass/90">
-              Start my visa plan
+            <div className="space-y-1">
+              <p className="text-xs leading-5 text-ink2">
+                You can edit details with Attaché later. Departure must be after arrival.
+              </p>
+              {error ? <p role="alert" className="text-xs leading-5 text-clay">{error}</p> : null}
+            </div>
+            <Button type="submit" disabled={!canSubmit || isSubmitting} size="lg" className="bg-brass text-white hover:bg-brass/90">
+              {isSubmitting ? "Starting..." : "Start my visa plan"}
             </Button>
           </div>
         </form>

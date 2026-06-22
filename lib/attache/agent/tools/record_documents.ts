@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { recordDocument } from "@/lib/db/queries";
 import { caseState, documentTypeSchema } from "../lib/state";
 
 const inputSchema = z.object({
@@ -23,44 +24,69 @@ export default defineTool({
     "Persist metadata for documents that were received from the applicant. This does not inspect document contents.",
   inputSchema,
   outputSchema,
-  async execute({ documents }) {
+  async execute({ documents }, ctx) {
     const current = caseState.get();
-    const now = Date.now();
-    const updates = new Map(current.documents.map((d) => [d.type, d]));
+    const clerkUserId = ctx.session.auth.current?.attributes.userId;
+    const clerkOrgId = ctx.session.auth.current?.attributes.orgId;
 
-    for (const [index, doc] of documents.entries()) {
-      const existing = updates.get(doc.type);
-      if (existing) {
-        updates.set(doc.type, {
-          ...existing,
-          name: doc.name,
-          status: "uploaded",
-          storageKey: doc.storage_key ?? existing.storageKey,
-        });
-      } else {
-        updates.set(doc.type, {
-          id: `doc-${now}-${index}`,
-          type: doc.type,
-          name: doc.name,
-          status: "uploaded",
-          storageKey: doc.storage_key,
-        });
-      }
+    if (typeof clerkUserId !== "string") {
+      throw new Error("No authenticated user found for this Eve session.");
     }
+    if (!current.visaCaseId) {
+      throw new Error("Load a visa case before recording documents.");
+    }
+    const visaCaseId = current.visaCaseId;
 
-    const nextDocuments = [...updates.values()];
-    const remainingRequested = nextDocuments
-      .filter((document) => document.status === "requested")
-      .map((document) => document.type);
+    const recordedDocuments = await Promise.all(
+      documents.map((document) => {
+        const originalFilename = document.name;
+        if (!originalFilename) throw new Error("Document filename is required.");
+
+        return recordDocument(
+          {
+            clerkUserId,
+            clerkOrgId: typeof clerkOrgId === "string" ? clerkOrgId : null,
+            visaCaseId,
+          },
+          {
+            documentType: document.type,
+            originalFilename,
+            storageKey: document.storage_key,
+          },
+        );
+      }),
+    );
+
+    const addedDocuments = recordedDocuments.filter(
+      (document): document is NonNullable<(typeof recordedDocuments)[number]> => document !== null,
+    );
+    const recordedTypes = addedDocuments.map((document) => document.documentType);
+    const recordedTypeSet = new Set(recordedTypes);
+    const remainingRequested = current.documentRequirements
+      .filter((requirement) => requirement.status === "requested" && !recordedTypeSet.has(requirement.type))
+      .map((requirement) => requirement.type);
 
     caseState.update((s) => ({
       ...s,
-      documents: nextDocuments,
-      status: s.status === "checklist_ready" && remainingRequested.length === 0 ? "documents_reviewed" : s.status,
+      documents: [
+        ...s.documents,
+        ...addedDocuments.map((document) => ({
+          id: document.id,
+          type: document.documentType,
+          name: document.originalFilename,
+          status: document.status,
+          storageKey: document.storageKey ?? undefined,
+        })),
+      ],
+      documentRequirements: s.documentRequirements.map((requirement) =>
+        recordedTypeSet.has(requirement.type) ? { ...requirement, status: "satisfied" as const } : requirement,
+      ),
+      status: remainingRequested.length === 0 ? "documents_received" : "documents_partially_received",
+      candidateStatus: remainingRequested.length === 0 ? "reviewing_documents" : "waiting_for_documents",
     }));
 
     return {
-      recorded: documents.map((d) => d.type),
+      recorded: recordedTypes,
       remaining_requested: remainingRequested,
       case_state: caseState.get(),
     };

@@ -3,6 +3,7 @@ import { always } from "eve/tools/approval";
 import { BrowserUse } from "browser-use-sdk/v3";
 import { z } from "zod";
 import { z as browserZ } from "zod/v4";
+import { appendEvent, updateVisaCase, upsertSubmission } from "@/lib/db/queries";
 import { caseState, type CaseState } from "../lib/state";
 
 type SubmissionResult = {
@@ -130,8 +131,23 @@ export default defineTool({
   inputSchema,
   outputSchema,
   needsApproval: always(),
-  async execute(input) {
+  async execute(input, ctx) {
     const state = caseState.get();
+    const userId = ctx.session.auth.current?.attributes.userId;
+    const orgId = ctx.session.auth.current?.attributes.orgId;
+
+    if (typeof userId !== "string") {
+      throw new Error("No authenticated user found for this Eve session.");
+    }
+    if (!state.visaCaseId) {
+      throw new Error("No loaded visa case found. Call load_case first.");
+    }
+
+    const owner = {
+      clerkUserId: userId,
+      clerkOrgId: typeof orgId === "string" ? orgId : null,
+      visaCaseId: state.visaCaseId,
+    };
     const portalUrl = input.portal_url ?? state.portalUrl;
 
     if (!portalUrl) {
@@ -145,36 +161,86 @@ export default defineTool({
         ? { start: input.preferred_appointment_start, end: input.preferred_appointment_end }
         : undefined;
 
-    const { sessionId, liveViewUrl, result } = await orchestrateSubmission({
+    await updateVisaCase(owner, {
+      internalStatus: "portal_draft_requested",
+      candidateStatus: "preparing_application",
+    });
+    await upsertSubmission(owner, {
       portalUrl: safePortalUrl,
-      formData,
-      preferredAppointment,
+      submissionStatus: "draft_requested",
+      submissionResult: { formData },
+    });
+    await appendEvent(owner, state.visaCaseId, {
+      eventType: "portal_draft_requested",
+      fromStatus: state.status,
+      toStatus: "portal_draft_requested",
+      payload: { portalUrl: safePortalUrl },
     });
 
-    caseState.update((s) => ({
-      ...s,
-      portalUrl: safePortalUrl,
-      status: "preparing_submission",
-      browserUseSessionId: sessionId,
-      submissionPreview: {
-        liveViewUrl,
-        ...result,
-      },
-    }));
+    try {
+      const { sessionId, liveViewUrl, result } = await orchestrateSubmission({
+        portalUrl: safePortalUrl,
+        formData,
+        preferredAppointment,
+      });
 
-    return {
-      live_view_url: liveViewUrl,
-      form_fields_filled: result.formFieldsFilled,
-      status: result.status,
-      ...(result.referenceNumber ? { reference_number: result.referenceNumber } : {}),
-      ...(result.appointmentDate ? { appointment_date: result.appointmentDate } : {}),
-      ...(result.appointmentTime ? { appointment_time: result.appointmentTime } : {}),
-      ...(result.appointmentLocation ? { appointment_location: result.appointmentLocation } : {}),
-      ...(result.confirmationCode ? { confirmation_code: result.confirmationCode } : {}),
-      ...(result.paymentConfirmation ? { payment_confirmation: result.paymentConfirmation } : {}),
-      ...(result.errors ? { errors: [...result.errors] } : {}),
-      case_state: caseState.get(),
-    };
+      await upsertSubmission(owner, {
+        portalUrl: safePortalUrl,
+        browserUseSessionId: sessionId,
+        liveViewUrl,
+        submissionStatus: result.status === "failed" ? "failed" : "draft_ready",
+        submissionResult: { ...result, formData },
+        referenceNumber: result.referenceNumber,
+      });
+      await updateVisaCase(owner, {
+        internalStatus: result.status === "failed" ? "portal_draft_requested" : "portal_draft_ready",
+        candidateStatus: result.status === "failed" ? "action_needed" : "waiting_for_approval",
+      });
+      await appendEvent(owner, state.visaCaseId, {
+        eventType: result.status === "failed" ? "portal_draft_failed" : "portal_draft_ready",
+        fromStatus: "portal_draft_requested",
+        toStatus: result.status === "failed" ? "portal_draft_requested" : "portal_draft_ready",
+        visibleToCandidate: true,
+        payload: { liveViewAvailable: Boolean(liveViewUrl), formFieldsFilled: result.formFieldsFilled },
+      });
+
+      caseState.update((s) => ({
+        ...s,
+        portalUrl: safePortalUrl,
+        status: result.status === "failed" ? "portal_draft_requested" : "portal_draft_ready",
+        candidateStatus: result.status === "failed" ? "action_needed" : "waiting_for_approval",
+        browserUseSessionId: sessionId,
+        submissionPreview: {
+          liveViewUrl,
+          ...result,
+        },
+      }));
+
+      return {
+        live_view_url: liveViewUrl,
+        form_fields_filled: result.formFieldsFilled,
+        status: result.status,
+        ...(result.referenceNumber ? { reference_number: result.referenceNumber } : {}),
+        ...(result.appointmentDate ? { appointment_date: result.appointmentDate } : {}),
+        ...(result.appointmentTime ? { appointment_time: result.appointmentTime } : {}),
+        ...(result.appointmentLocation ? { appointment_location: result.appointmentLocation } : {}),
+        ...(result.confirmationCode ? { confirmation_code: result.confirmationCode } : {}),
+        ...(result.paymentConfirmation ? { payment_confirmation: result.paymentConfirmation } : {}),
+        ...(result.errors ? { errors: [...result.errors] } : {}),
+        case_state: caseState.get(),
+      };
+    } catch (error) {
+      await upsertSubmission(owner, {
+        portalUrl: safePortalUrl,
+        submissionStatus: "failed",
+        submissionResult: { error: error instanceof Error ? error.message : "Unknown Browser Use failure" },
+      });
+      await updateVisaCase(owner, {
+        internalStatus: "portal_draft_requested",
+        candidateStatus: "action_needed",
+      });
+      throw error;
+    }
   },
   toModelOutput(output) {
     return {
