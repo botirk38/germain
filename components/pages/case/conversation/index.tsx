@@ -6,14 +6,15 @@ import { EmptyState } from "./empty";
 import { ChatMessages } from "./messages";
 
 function ConversationError() {
-  const { agent } = useCasePage();
-  if (!agent.error) return null;
+  const { agent, uploadError } = useCasePage();
+  const message = uploadError ?? agent.error?.message;
+  if (!message) return null;
 
   return (
     <div style={{ background: "var(--bone)" }} className="px-5 pb-3">
       <Alert variant="destructive" className="mx-auto max-w-[680px] border-clay bg-[var(--tint-problem)] font-mono tracking-[0.04em]">
         <AlertTitle className="text-[10.5px] uppercase text-clay">Problem</AlertTitle>
-        <AlertDescription className="text-[10.5px] text-ink2">{agent.error.message}</AlertDescription>
+        <AlertDescription className="text-[10.5px] text-ink2">{message}</AlertDescription>
       </Alert>
     </div>
   );

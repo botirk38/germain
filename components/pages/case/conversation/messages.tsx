@@ -8,14 +8,8 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import type { UploadedDocument } from "@/hooks/case/use-case-page";
 import { DynamicToolPart } from "./tool-card";
-
-type UploadedDocument = {
-  readonly id: string;
-  readonly type: string;
-  readonly name: string;
-  readonly status: "uploaded";
-};
 
 interface ChatMessagesProps {
   readonly messages: readonly EveMessage[];

@@ -8,13 +8,7 @@ import { KeyButton } from "@/components/attache/KeyButton";
 import { MachinePanel } from "@/components/attache/MachinePanel";
 import { StatusMark } from "@/components/attache/StatusMark";
 import { Button } from "@/components/ui/button";
-
-type UploadedDocument = {
-  readonly id: string;
-  readonly type: string;
-  readonly name: string;
-  readonly status: "uploaded";
-};
+import type { UploadedDocument } from "@/hooks/case/use-case-page";
 
 type DynamicToolPartProps = {
   readonly part: EveDynamicToolPart;

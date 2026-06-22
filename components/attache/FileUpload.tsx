@@ -5,9 +5,6 @@ import { Card, CardHead } from "@/components/attache/Card";
 import { StatusMark } from "@/components/attache/StatusMark";
 import { KeyButton } from "@/components/attache/KeyButton";
 
-// Metadata-only document intake. Files stay in the browser; only names/types are
-// sent to the agent until a real storage-backed upload route exists.
-
 const TYPE_LABEL = (t: string) => t.replace(/_/g, " ").toUpperCase();
 
 // lightweight filename → document-type matcher
@@ -56,10 +53,10 @@ export function FileUpload({
 }: {
   requiredTypes: string[];
   criticalDocuments: string[];
-  onUpload: (documents: { id: string; type: string; name: string; status: "uploaded" }[]) => void;
+  onUpload: (documents: { id: string; type: string; name: string; file: File; status: "uploaded" }[]) => void;
   isSubmitting: boolean;
 }) {
-  const [attached, setAttached] = useState<Record<string, string>>({});
+  const [attached, setAttached] = useState<Record<string, File>>({});
   const [dragging, setDragging] = useState(false);
   const [unmatched, setUnmatched] = useState<string[]>([]);
   const browseRef = useRef<HTMLInputElement>(null);
@@ -84,7 +81,7 @@ export function FileUpload({
     const usedFiles = new Set<number>();
     for (const p of pairs) {
       if (usedFiles.has(p.fi) || taken.has(p.type)) continue;
-      next[p.type] = fileArr[p.fi].name;
+      next[p.type] = fileArr[p.fi];
       usedFiles.add(p.fi);
       taken.add(p.type);
     }
@@ -95,7 +92,7 @@ export function FileUpload({
       if (usedFiles.has(fi)) return;
       const open = requiredTypes.find((t) => !taken.has(t));
       if (open) {
-        next[open] = f.name;
+        next[open] = f;
         taken.add(open);
         usedFiles.add(fi);
       } else {
@@ -109,7 +106,7 @@ export function FileUpload({
 
   const assignToSlot = (type: string, file: File | undefined) => {
     if (!file) return;
-    setAttached((a) => ({ ...a, [type]: file.name }));
+    setAttached((a) => ({ ...a, [type]: file }));
   };
 
   const onDrop = (e: DragEvent) => {
@@ -134,7 +131,8 @@ export function FileUpload({
       .map((type) => ({
         id: `doc-${requiredTypes.indexOf(type)}`,
         type,
-        name: attached[type],
+        name: attached[type].name,
+        file: attached[type],
         status: "uploaded" as const,
       }));
     onUpload(docs);
@@ -157,11 +155,11 @@ export function FileUpload({
         onKeyDown={onDropzoneKeyDown}
         role="button"
         tabIndex={0}
-        aria-label="Attach document filenames"
+        aria-label="Upload document files"
       >
-        <div className="dz-title">▤ MATCH FILE NAMES</div>
+        <div className="dz-title">▤ MATCH AND UPLOAD FILES</div>
         <div className="dz-sub">
-          Files stay local for now. We send document names to Attaché for planning.
+          Attach files once. Attaché uploads them privately before recording the documents.
         </div>
         <input
           ref={browseRef}
@@ -192,13 +190,13 @@ export function FileUpload({
                 {file ? (
                   <span className="upl-file">
                     <StatusMark word="received" />
-                    <span className="upl-name" title={file}>
-                      {file}
+                    <span className="upl-name" title={file.name}>
+                      {file.name}
                     </span>
                     <button
                       type="button"
                       className="upl-x"
-                      aria-label={`Remove ${TYPE_LABEL(type)} file ${file}`}
+                      aria-label={`Remove ${TYPE_LABEL(type)} file ${file.name}`}
                       onClick={() =>
                         setAttached((a) => {
                           const n = { ...a };
@@ -237,8 +235,8 @@ export function FileUpload({
       ) : null}
 
       <div style={{ paddingTop: 12 }}>
-        <KeyButton onClick={submit} disabled={!canSubmit} submittingLabel="TRANSMITTING…">
-          {attachedCount === requiredTypes.length ? "RECORD ALL DOCUMENTS" : "RECORD DOCUMENTS"}
+        <KeyButton onClick={submit} disabled={!canSubmit} submittingLabel="UPLOADING…">
+          {attachedCount === requiredTypes.length ? "UPLOAD ALL DOCUMENTS" : "UPLOAD DOCUMENTS"}
         </KeyButton>
         {missingCritical.length > 0 ? (
           <span className="dz-hint">

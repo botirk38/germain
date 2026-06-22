@@ -9,6 +9,8 @@ export type UploadedDocument = {
   readonly id: string;
   readonly type: string;
   readonly name: string;
+  readonly file: File;
+  readonly storageKey?: string;
   readonly status: "uploaded";
 };
 
@@ -19,6 +21,7 @@ export type CasePageContextValue = {
   readonly actionNeeded: boolean;
   readonly requestBusy: boolean;
   readonly pendingHumanInput: boolean;
+  readonly uploadError: string | null;
   readonly sendText: (text: string) => void;
   readonly recordDocuments: (documents: readonly UploadedDocument[]) => void;
   readonly respondToInput: (response: InputResponse) => void;

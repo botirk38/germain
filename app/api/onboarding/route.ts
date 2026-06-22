@@ -13,10 +13,14 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid onboarding data", issues: parsed.error.issues }, { status: 400 });
   }
+  if (!parsed.data.passportStorageKey) {
+    return Response.json({ error: "Passport upload is required" }, { status: 400 });
+  }
 
   await recordUserDocument({ clerkUserId: userId, clerkOrgId: orgId }, {
     documentType: "passport",
     originalFilename: parsed.data.passportOriginalFilename,
+    storageKey: parsed.data.passportStorageKey,
   });
 
   return Response.json({ nextUrl: "/visas" });
