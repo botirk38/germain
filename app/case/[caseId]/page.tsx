@@ -2,7 +2,13 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import { initialCaseState } from "@/components/attache/initial-states";
 import type { CaseState, Recommendation } from "@/components/attache/case-types";
-import { CaseComposer, CaseConversation, CaseError, CaseHeader, CaseMobileSummary, CasePageProvider, CaseSidebar } from "@/components/pages/case/case-page";
+import { CaseComposer } from "@/components/pages/case/case-composer";
+import { CaseConversation } from "@/components/pages/case/case-conversation";
+import { CaseError } from "@/components/pages/case/case-error";
+import { CaseHeader } from "@/components/pages/case/case-header";
+import { CaseMobileSummary } from "@/components/pages/case/case-mobile-summary";
+import { CasePageProvider } from "@/components/pages/case/case-page-provider";
+import { CaseSidebar } from "@/components/pages/case/case-sidebar";
 import { getVisaCaseProjection } from "@/lib/db/queries";
 
 type VisaCaseProjection = NonNullable<Awaited<ReturnType<typeof getVisaCaseProjection>>>;
