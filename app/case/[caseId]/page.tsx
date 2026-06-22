@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { initialCaseState } from "@/components/attache/initial-states";
 import type { CaseState, Recommendation } from "@/components/attache/case-types";
 import { getVisaCaseProjection } from "@/lib/db/queries";
-import { VisaCaseClient } from "./visa-case-client";
+import { VisaCaseClient } from "@/components/pages/case/visa-case-client";
 
 type VisaCaseProjection = NonNullable<Awaited<ReturnType<typeof getVisaCaseProjection>>>;
 
