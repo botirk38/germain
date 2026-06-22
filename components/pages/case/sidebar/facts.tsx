@@ -1,5 +1,11 @@
-import type { CaseState } from "@/components/attache/case-types";
 import { ClRow } from "@/components/attache/Card";
+import type { VisaCaseView } from "@/lib/db/queries";
+
+function isRecommendation(value: unknown): value is { readonly id: string; readonly issue: string; readonly fix: string; readonly resolved?: boolean } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.id === "string" && typeof candidate.issue === "string" && typeof candidate.fix === "string";
+}
 
 function ApprovalLikelihoodRing({ likelihood }: { readonly likelihood: number }) {
   const pct = Math.max(0, Math.min(100, likelihood));
@@ -21,10 +27,11 @@ function ApprovalLikelihoodRing({ likelihood }: { readonly likelihood: number })
 // Case file panel: approval ring + key facts as dotted-leader rows, then
 // unresolved recommendations (amber) and risk flags (clay). Empty sections
 // are omitted.
-export function CaseFacts({ caseState }: { caseState: CaseState }) {
-  const appointment = caseState.appointments[0];
-  const { fees, financials } = caseState;
-  const recommendations = caseState.recommendations
+export function CaseFacts({ caseView }: { readonly caseView: VisaCaseView }) {
+  const { visaCase, latestAssessment, caseSubmission } = caseView;
+  const approvalLikelihood = latestAssessment?.approvalLikelihood ?? 35;
+  const recommendations = (latestAssessment?.recommendations ?? [])
+    .filter(isRecommendation)
     .filter((r) => !r.resolved)
     .slice(0, 3);
 
@@ -36,40 +43,22 @@ export function CaseFacts({ caseState }: { caseState: CaseState }) {
       </div>
       <div className="panel-body">
         <div className="flex flex-col items-center gap-1 py-2">
-          <ApprovalLikelihoodRing likelihood={caseState.approvalLikelihood} />
+          <ApprovalLikelihoodRing likelihood={approvalLikelihood} />
           <div className="font-mono text-[8.5px] tracking-[0.22em] text-ink2">
             APPROVAL
           </div>
         </div>
 
-        {appointment ? (
-          <div className="py-1">
-            <div className="font-mono text-[9px] tracking-[0.14em] text-ink2">
-              NEXT APPOINTMENT
-            </div>
-            <div className="font-mono text-[10px] leading-relaxed text-ink">
-              {appointment.date} · {appointment.time} · {appointment.location}
-            </div>
-          </div>
+        {visaCase.referenceNumber ?? caseSubmission?.referenceNumber ? (
+          <ClRow label="REF" state={visaCase.referenceNumber ?? caseSubmission?.referenceNumber ?? ""} />
         ) : null}
 
-        {fees.total > 0 ? (
-          <ClRow
-            label="FEES"
-            state={`$${fees.total.toLocaleString()} · ${fees.paid ? "PAID" : "UNPAID"}`}
-          />
+        {caseSubmission?.submissionStatus ? (
+          <ClRow label="SUBMISSION" state={caseSubmission.submissionStatus.replace(/_/g, " ").toUpperCase()} />
         ) : null}
 
-        {caseState.referenceNumber ? (
-          <ClRow label="REF" state={caseState.referenceNumber} />
-        ) : null}
-
-        {financials.bankBalance != null ? (
-          <ClRow label="BANK" state={`$${financials.bankBalance.toLocaleString()}`} />
-        ) : null}
-
-        {financials.coverageRatio != null ? (
-          <ClRow label="COVERAGE" state={`${financials.coverageRatio.toFixed(1)}×`} />
+        {caseView.coreDocuments.length > 0 ? (
+          <ClRow label="CORE DOCS" state={`${caseView.coreDocuments.length}`} />
         ) : null}
 
         {recommendations.length > 0 ? (
@@ -86,9 +75,9 @@ export function CaseFacts({ caseState }: { caseState: CaseState }) {
           </div>
         ) : null}
 
-        {caseState.riskFlags.length > 0 ? (
+        {(latestAssessment?.riskFlags.length ?? 0) > 0 ? (
           <div className="mt-2 flex flex-col gap-1.5">
-            {caseState.riskFlags.map((flag, i) => (
+            {latestAssessment?.riskFlags.map((flag, i) => (
               <div
                 key={i}
                 className="font-mono text-[10px] leading-relaxed"

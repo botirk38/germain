@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { onboardingSchema } from "@/lib/db/onboarding";
-import { createVisaCaseFromOnboarding } from "@/lib/db/queries";
+import { recordUserDocument } from "@/lib/db/queries";
 
 export async function POST(request: Request) {
   const { userId, orgId } = await auth();
@@ -14,14 +14,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid onboarding data", issues: parsed.error.issues }, { status: 400 });
   }
 
-  const projection = await createVisaCaseFromOnboarding(
-    { clerkUserId: userId, clerkOrgId: orgId },
-    { ...parsed.data, rawIntake: parsed.data },
-  );
+  await recordUserDocument({ clerkUserId: userId, clerkOrgId: orgId }, {
+    documentType: "passport",
+    originalFilename: parsed.data.passportOriginalFilename,
+  });
 
-  if (!projection) {
-    return Response.json({ error: "Could not create visa case" }, { status: 500 });
-  }
-
-  return Response.json({ visaCaseId: projection.visaCase.id });
+  return Response.json({ nextUrl: "/visas" });
 }

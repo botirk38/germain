@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { createDocumentRequirements } from "@/lib/db/queries";
-import { caseState, documentTypeSchema } from "../lib/state";
+import { createDocumentRequirements, getVisaCaseView } from "@/lib/db/queries";
+import { activeVisaCase, documentTypeSchema } from "../lib/state";
 
 const inputSchema = z.object({
   document_types: z.array(documentTypeSchema).min(1).describe("The document types to request from the user."),
@@ -14,7 +14,7 @@ const outputSchema = z.object({
   reason: z.string(),
   guidance: z.string().optional(),
   total_pending: z.number(),
-  case_state: z.unknown(),
+  case_view: z.unknown(),
 });
 
 export default defineTool({
@@ -23,7 +23,7 @@ export default defineTool({
   inputSchema,
   outputSchema,
   async execute({ document_types, reason, guidance }, ctx) {
-    const current = caseState.get();
+    const current = activeVisaCase.get();
     const clerkUserId = ctx.session.auth.current?.attributes.userId;
     const clerkOrgId = ctx.session.auth.current?.attributes.orgId;
 
@@ -33,8 +33,14 @@ export default defineTool({
     if (!current.visaCaseId) {
       throw new Error("Load a visa case before requesting documents.");
     }
+    const caseView = await getVisaCaseView({
+      clerkUserId,
+      clerkOrgId: typeof clerkOrgId === "string" ? clerkOrgId : null,
+      visaCaseId: current.visaCaseId,
+    });
+    if (!caseView) throw new Error("Visa case not found for the authenticated user.");
 
-    const existingTypes = new Set(current.documentRequirements.map((requirement) => requirement.type));
+    const existingTypes = new Set(caseView.documentRequirements.map((requirement) => requirement.documentType));
     const requested = document_types.filter((type) => !existingTypes.has(type));
 
     const requirements = await createDocumentRequirements(
@@ -45,31 +51,18 @@ export default defineTool({
       },
       requested.map((documentType) => ({ documentType, reason, guidance })),
     );
-
-    caseState.update((s) => ({
-      ...s,
-      documentRequirements: [
-        ...s.documentRequirements,
-        ...requirements.map((requirement) => ({
-          id: requirement.id,
-          type: requirement.documentType,
-          label: requirement.label,
-          reason: requirement.reason,
-          guidance: requirement.guidance ?? undefined,
-          required: requirement.required,
-          status: requirement.status,
-        })),
-      ],
-      status: "documents_requested",
-      candidateStatus: "waiting_for_documents",
-    }));
+    const nextCaseView = await getVisaCaseView({
+      clerkUserId,
+      clerkOrgId: typeof clerkOrgId === "string" ? clerkOrgId : null,
+      visaCaseId: current.visaCaseId,
+    });
 
     return {
       requested_types: requested,
       reason,
       guidance,
-      total_pending: current.documentRequirements.length + requirements.length,
-      case_state: caseState.get(),
+      total_pending: caseView.documentRequirements.length + requirements.length,
+      case_view: nextCaseView,
     };
   },
   toModelOutput(output) {

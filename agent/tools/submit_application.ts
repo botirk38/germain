@@ -3,8 +3,8 @@ import { always } from "eve/tools/approval";
 import { BrowserUse } from "browser-use-sdk/v3";
 import { z } from "zod";
 import { z as browserZ } from "zod/v4";
-import { appendEvent, updateVisaCase, upsertSubmission } from "@/lib/db/queries";
-import { caseState } from "../lib/state";
+import { appendEvent, getVisaCaseView, updateVisaCase, upsertSubmission } from "@/lib/db/queries";
+import { activeVisaCase } from "../lib/state";
 
 const browserSubmissionConfirmationSchema = browserZ.object({
   referenceNumber: browserZ.string(),
@@ -39,7 +39,7 @@ const inputSchema = z.object({});
 const outputSchema = z.object({
   submitted: z.boolean(),
   reference_number: z.string(),
-  case_state: z.unknown(),
+  case_view: z.unknown(),
 });
 
 export default defineTool({
@@ -49,7 +49,7 @@ export default defineTool({
   outputSchema,
   needsApproval: always(),
   async execute(_input, ctx) {
-    const state = caseState.get();
+    const state = activeVisaCase.get();
     const userId = ctx.session.auth.current?.attributes.userId;
     const orgId = ctx.session.auth.current?.attributes.orgId;
 
@@ -59,22 +59,26 @@ export default defineTool({
     if (!state.visaCaseId) {
       throw new Error("No loaded visa case found. Call load_case first.");
     }
-    if (state.status !== "portal_draft_ready" && state.status !== "final_submission_requested") {
-      throw new Error("The application is not ready for final submission. Prepare and review it first.");
-    }
-    if (!state.browserUseSessionId) {
-      throw new Error("No prepared submission session found. Call prepare_submission first.");
-    }
-    if (!state.submissionPreview || state.submissionPreview.status === "failed") {
-      throw new Error("No successful submission preview exists. Review the portal draft before submitting.");
-    }
 
     const owner = {
       clerkUserId: userId,
       clerkOrgId: typeof orgId === "string" ? orgId : null,
       visaCaseId: state.visaCaseId,
     };
-
+    const caseView = await getVisaCaseView(owner);
+    if (!caseView) throw new Error("Visa case not found for the authenticated user.");
+    if (
+      caseView.visaCase.internalStatus !== "portal_draft_ready" &&
+      caseView.visaCase.internalStatus !== "final_submission_requested"
+    ) {
+      throw new Error("The application is not ready for final submission. Prepare and review it first.");
+    }
+    if (!caseView.caseSubmission?.browserUseSessionId) {
+      throw new Error("No prepared submission session found. Call prepare_submission first.");
+    }
+    if (caseView.caseSubmission.submissionStatus === "failed") {
+      throw new Error("No successful submission preview exists. Review the portal draft before submitting.");
+    }
     await updateVisaCase(owner, {
       internalStatus: "final_submission_requested",
       candidateStatus: "waiting_for_approval",
@@ -84,17 +88,15 @@ export default defineTool({
     });
     await appendEvent(owner, state.visaCaseId, {
       eventType: "final_submission_approved",
-      fromStatus: state.status,
+      fromStatus: caseView.visaCase.internalStatus,
       toStatus: "final_submission_requested",
     });
 
-    const { referenceNumber, submitted } = await finalizeSubmission(state.browserUseSessionId);
+    const { referenceNumber, submitted } = await finalizeSubmission(caseView.caseSubmission.browserUseSessionId);
 
     if (!submitted) {
       throw new Error("Submission could not be completed. Please review the portal and try again.");
     }
-
-    const now = new Date().toISOString();
 
     await upsertSubmission(owner, {
       submissionStatus: "submitted",
@@ -116,26 +118,12 @@ export default defineTool({
       payload: { referenceNumber },
     });
 
-    caseState.update((s) => ({
-      ...s,
-      status: "submitted",
-      referenceNumber,
-      browserUseSessionId: undefined,
-      timeline: [
-        ...s.timeline,
-        {
-          title: "Application submitted",
-          description: `Reference number ${referenceNumber}`,
-          time: now,
-          status: "complete",
-        },
-      ],
-    }));
+    const nextCaseView = await getVisaCaseView(owner);
 
     return {
       submitted: true,
       reference_number: referenceNumber,
-      case_state: caseState.get(),
+      case_view: nextCaseView,
     };
   },
   toModelOutput(output) {

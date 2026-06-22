@@ -171,13 +171,13 @@ function RequestDocumentsOutput({
   readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
 }) {
   const requestedTypes = stringArrayField(output, "requested_types");
-  const caseState = recordField(output, "case_state");
-  const documents = objectArrayField(caseState ?? {}, "documents");
+  const caseView = recordField(output, "case_view");
+  const requirements = objectArrayField(caseView ?? {}, "documentRequirements");
   const pendingTypes = requestedTypes.length > 0
     ? requestedTypes
-    : documents
+    : requirements
         .filter((document) => stringField(document, "status") === "requested")
-        .map((document) => stringField(document, "type"))
+        .map((document) => stringField(document, "documentType"))
         .filter(Boolean);
 
   if (pendingTypes.length === 0) {

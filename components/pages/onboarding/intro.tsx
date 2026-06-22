@@ -11,24 +11,24 @@ export function Intro() {
             <span className="rim" />
             ATTACHÉ
           </div>
-          <div className="mt-2 font-mono text-[9px] uppercase tracking-[0.22em] text-ink2">visa intake</div>
+          <div className="mt-2 font-mono text-[9px] uppercase tracking-[0.22em] text-ink2">core documents</div>
         </div>
       </div>
 
       <div className="mt-8 space-y-4">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">Takes about 90 seconds</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-brass">Takes about 30 seconds</p>
         <h1 className="max-w-sm text-3xl font-semibold leading-tight tracking-[-0.04em] text-ink">
-          Start with only the details Attaché needs.
+          Start with the document every case needs.
         </h1>
         <p className="max-w-sm text-sm leading-6 text-ink2">
-          A short intake is faster than a chat interview. You can add documents and edge cases after the visa plan starts.
+          Attaché keeps the first step application-agnostic. Record your passport now, then choose the visa route.
         </p>
       </div>
 
       <div className="mt-7 grid grid-cols-3 gap-2">
-        <MiniCard label="Step 1" value="Profile" />
-        <MiniCard label="Step 2" value="Trip" />
-        <MiniCard label="Step 3" value="Risk" />
+        <MiniCard label="Step 1" value="Passport" />
+        <MiniCard label="Step 2" value="Visa" />
+        <MiniCard label="Step 3" value="Case" />
       </div>
     </section>
   );

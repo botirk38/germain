@@ -2,8 +2,8 @@
 
 import { createContext, use } from "react";
 import type { InputResponse } from "eve/client";
-import type { CaseState } from "@/components/attache/case-types";
 import type { useAttacheAgent } from "@/hooks/case/use-attache-agent";
+import type { VisaCaseView } from "@/lib/db/queries";
 
 export type UploadedDocument = {
   readonly id: string;
@@ -14,7 +14,7 @@ export type UploadedDocument = {
 
 export type CasePageContextValue = {
   readonly agent: ReturnType<typeof useAttacheAgent>;
-  readonly caseState: CaseState;
+  readonly caseView: VisaCaseView;
   readonly displayStepIndex: number;
   readonly actionNeeded: boolean;
   readonly requestBusy: boolean;

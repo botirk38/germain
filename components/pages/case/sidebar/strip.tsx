@@ -1,30 +1,25 @@
 "use client";
 
-import type { CaseState } from "@/components/attache/case-types";
+import type { VisaCaseView } from "@/lib/db/queries";
 
 // ATC flight strip: applicant + case id + route + travel window.
 // Renders graceful placeholders pre-intake.
-export function CaseStrip({ caseState }: { caseState: CaseState }) {
-  // The case id is minted with Date.now() at module load, so the server and
-  // client can disagree during hydration.
-
-  const shortId =
-    caseState.id
-      ? caseState.id.replace(/^case-/, "").slice(-6).toUpperCase()
-      : "——————";
-  const name = caseState.applicant.fullName?.toUpperCase() ?? "—";
+export function CaseStrip({ caseView }: { readonly caseView: VisaCaseView }) {
+  const { visaCase, intake } = caseView;
+  const shortId = visaCase.id.slice(-6).toUpperCase();
+  const name = intake?.applicantFullName?.toUpperCase() ?? "—";
 
   const visaRow =
-    caseState.visaType || caseState.destinationCountry
-      ? [caseState.visaType, caseState.destinationCountry]
+    visaCase.visaType || visaCase.destinationCountry
+      ? [visaCase.visaType, visaCase.destinationCountry]
           .filter(Boolean)
           .join(" · ")
           .toUpperCase()
       : "AWAITING INTAKE";
 
   const datesRow =
-    caseState.travel.arrivalDate || caseState.travel.departureDate
-      ? `${caseState.travel.arrivalDate ?? "—"} → ${caseState.travel.departureDate ?? "—"}`
+    intake?.arrivalDate || intake?.departureDate
+      ? `${intake.arrivalDate ?? "—"} → ${intake.departureDate ?? "—"}`
       : "TRAVEL DATES —";
 
   return (

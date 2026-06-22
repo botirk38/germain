@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { splitFlapWord } from "@/components/attache/display";
-import type { CaseStatus } from "@/components/attache/case-types";
+import { splitFlapWord, type CaseStatus } from "@/components/attache/display";
 
 const CELL_COUNT = 10;
 

@@ -67,6 +67,10 @@ export const travelPurposeEnum = pgEnum("travel_purpose", [
   "transit",
 ]);
 
+export const visaTypeEnum = pgEnum("visa_type", [
+  "schengen_short_stay_visitor",
+]);
+
 export const documentTypeEnum = pgEnum("document_type", [
   "passport",
   "photo",
@@ -129,6 +133,7 @@ export const visaCases = pgTable(
     internalStatus: caseStatusEnum("internal_status").notNull().default("intake_started"),
     candidateStatus: candidateStatusEnum("candidate_status").notNull().default("getting_started"),
     destinationCountry: text("destination_country").notNull(),
+    visaType: visaTypeEnum("visa_type").notNull(),
     travelPurpose: travelPurposeEnum("travel_purpose").notNull(),
     referenceNumber: text("reference_number"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -148,17 +153,17 @@ export const visaCaseIntake = pgTable(
     visaCaseId: uuid("visa_case_id")
       .primaryKey()
       .references(() => visaCases.id, { onDelete: "cascade" }),
-    applicantFullName: text("applicant_full_name").notNull(),
-    applicantNationality: text("applicant_nationality").notNull(),
-    applicantResidenceCountry: text("applicant_residence_country").notNull(),
-    applicantResidenceCity: text("applicant_residence_city").notNull(),
-    applicantEmploymentStatus: employmentStatusEnum("applicant_employment_status").notNull(),
+    applicantFullName: text("applicant_full_name"),
+    applicantNationality: text("applicant_nationality"),
+    applicantResidenceCountry: text("applicant_residence_country"),
+    applicantResidenceCity: text("applicant_residence_city"),
+    applicantEmploymentStatus: employmentStatusEnum("applicant_employment_status"),
     applicantEmployer: text("applicant_employer"),
     applicantJobTitle: text("applicant_job_title"),
     applicantMonthlyIncome: integer("applicant_monthly_income"),
     destinationCity: text("destination_city"),
-    arrivalDate: date("arrival_date").notNull(),
-    departureDate: date("departure_date").notNull(),
+    arrivalDate: date("arrival_date"),
+    departureDate: date("departure_date"),
     familyInHomeCountry: boolean("family_in_home_country").notNull().default(false),
     propertyOwned: boolean("property_owned").notNull().default(false),
     previousRefusals: boolean("previous_refusals").notNull().default(false),
@@ -167,6 +172,29 @@ export const visaCaseIntake = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [index("visa_case_intake_arrival_idx").on(table.arrivalDate)],
+);
+
+export const userDocuments = pgTable(
+  "user_documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clerkUserId: text("clerk_user_id").notNull(),
+    clerkOrgId: text("clerk_org_id"),
+    documentType: documentTypeEnum("document_type").notNull(),
+    status: documentStatusEnum("status").notNull().default("uploaded"),
+    originalFilename: text("original_filename").notNull(),
+    storageKey: text("storage_key"),
+    mimeType: text("mime_type"),
+    sizeBytes: integer("size_bytes"),
+    sha256: text("sha256"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("user_documents_user_type_idx").on(table.clerkUserId, table.documentType),
+    index("user_documents_org_type_idx").on(table.clerkOrgId, table.documentType),
+  ],
 );
 
 export const visaCaseAssessments = pgTable(

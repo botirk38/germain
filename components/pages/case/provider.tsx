@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import type { InputResponse } from "eve/client";
 import { useAttacheAgent } from "@/hooks/case/use-attache-agent";
 import { CasePageContext, type UploadedDocument } from "@/hooks/case/use-case-page";
-import type { CaseState } from "@/components/attache/case-types";
 import { actionNeeded as caseActionNeeded, getDisplayStepIndex } from "@/components/attache/display";
+import type { VisaCaseView } from "@/lib/db/queries";
 
 function hasPendingHumanInput(messages: ReturnType<typeof useAttacheAgent>["data"]["messages"]): boolean {
   return messages.some(
@@ -23,20 +23,20 @@ function documentsMessage(documents: readonly UploadedDocument[]): string {
 
 export function CasePageProvider({
   caseId,
-  initialCaseState,
+  initialCaseView,
   children,
 }: {
   readonly caseId: string;
-  readonly initialCaseState: CaseState;
+  readonly initialCaseView: VisaCaseView;
   readonly children: ReactNode;
 }) {
   const router = useRouter();
-  const agent = useAttacheAgent({ caseId, initialCaseState });
-  const caseState = agent.caseState;
+  const agent = useAttacheAgent({ caseId, initialCaseView });
+  const caseView = agent.caseView;
   const requestBusy = agent.status === "submitted" || agent.status === "streaming";
   const pendingHumanInput = hasPendingHumanInput(agent.data.messages);
-  const displayStepIndex = getDisplayStepIndex(caseState.status);
-  const actionNeeded = caseActionNeeded(caseState) || pendingHumanInput;
+  const displayStepIndex = getDisplayStepIndex(caseView.visaCase.internalStatus);
+  const actionNeeded = caseActionNeeded(caseView) || pendingHumanInput;
 
   const sendText = (text: string) => {
     if (!text.trim() || requestBusy) return;
@@ -70,7 +70,7 @@ export function CasePageProvider({
     <CasePageContext
       value={{
         agent,
-        caseState,
+        caseView,
         displayStepIndex,
         actionNeeded,
         requestBusy,

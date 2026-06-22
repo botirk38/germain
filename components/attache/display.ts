@@ -1,4 +1,8 @@
-import type { CaseState } from "./case-types";
+import type { VisaCaseView } from "@/lib/db/queries";
+
+export type CaseStatus = VisaCaseView["visaCase"]["internalStatus"];
+export type DocumentStatus = VisaCaseView["documents"][number]["status"];
+export type RequirementStatus = VisaCaseView["documentRequirements"][number]["status"];
 
 export const DISPLAY_STEPS = [
   "Plan",
@@ -8,7 +12,7 @@ export const DISPLAY_STEPS = [
   "Decision",
 ] as const;
 
-const STATUS_TO_DISPLAY_STEP: Record<CaseState["status"], number> = {
+const STATUS_TO_DISPLAY_STEP: Record<CaseStatus, number> = {
   intake_started: 0,
   intake_completed: 0,
   route_assessed: 0,
@@ -32,7 +36,7 @@ const STATUS_TO_DISPLAY_STEP: Record<CaseState["status"], number> = {
   closed: 4,
 };
 
-export function getDisplayStepIndex(status: CaseState["status"]): number {
+export function getDisplayStepIndex(status: CaseStatus): number {
   return STATUS_TO_DISPLAY_STEP[status] ?? 0;
 }
 
@@ -58,10 +62,14 @@ export const STATUS_WORD_META: Record<
   waiting: { mark: "", label: "Waiting", tone: "plain" },
 };
 
-export function docStatusWord(s: CaseState["documents"][number]["status"]): StatusWord {
+export function docStatusWord(s: DocumentStatus | RequirementStatus): StatusWord {
   switch (s) {
     case "requested":
       return "waiting";
+    case "satisfied":
+      return "verified";
+    case "waived":
+      return "received";
     case "uploaded":
     case "processing":
       return "received";
@@ -87,7 +95,7 @@ export function reviewStatusWord(
   }
 }
 
-const SPLIT_FLAP_WORDS: Record<CaseState["status"], string> = {
+const SPLIT_FLAP_WORDS: Record<CaseStatus, string> = {
   intake_started: "INTAKE",
   intake_completed: "PLANNING",
   route_assessed: "PLAN READY",
@@ -111,11 +119,10 @@ const SPLIT_FLAP_WORDS: Record<CaseState["status"], string> = {
   closed: "CLOSED",
 };
 
-export function splitFlapWord(status: CaseState["status"]): string {
+export function splitFlapWord(status: CaseStatus): string {
   return SPLIT_FLAP_WORDS[status] ?? "INTAKE";
 }
 
-export function actionNeeded(state: CaseState): boolean {
-  return state.candidateActions.some((action) => action.status === "open") ||
-    state.embassyFollowUps.some((f) => f.type === "rfe" && !f.responded);
+export function actionNeeded(caseView: VisaCaseView): boolean {
+  return caseView.candidateActions.some((action) => action.status === "open");
 }

@@ -3,8 +3,8 @@ import { always } from "eve/tools/approval";
 import { BrowserUse } from "browser-use-sdk/v3";
 import { z } from "zod";
 import { z as browserZ } from "zod/v4";
-import { appendEvent, updateVisaCase, upsertSubmission } from "@/lib/db/queries";
-import { caseState, type CaseState } from "../lib/state";
+import { appendEvent, getVisaCaseView, updateVisaCase, upsertSubmission, type VisaCaseView } from "@/lib/db/queries";
+import { activeVisaCase } from "../lib/state";
 
 type SubmissionResult = {
   readonly referenceNumber?: string;
@@ -41,21 +41,22 @@ function getBrowserUseClient(): BrowserUse {
   return browserClient;
 }
 
-function generateFormData(state: CaseState): Record<string, string> {
+function generateFormData(caseView: VisaCaseView): Record<string, string> {
+  const { visaCase, intake } = caseView;
   return {
-    fullName: state.applicant.fullName ?? "",
-    nationality: state.applicant.nationality ?? "",
-    residenceCountry: state.applicant.residenceCountry ?? "",
-    residenceCity: state.applicant.residenceCity ?? "",
-    employmentStatus: state.applicant.employmentStatus ?? "",
-    employer: state.applicant.employer ?? "",
-    jobTitle: state.applicant.jobTitle ?? "",
-    purposeOfTravel: state.travel.purpose ?? "",
-    destinationCountry: state.destinationCountry ?? "",
-    destinationCity: state.travel.destinationCity ?? "",
-    arrivalDate: state.travel.arrivalDate ?? "",
-    departureDate: state.travel.departureDate ?? "",
-    fundingSource: state.applicant.employer ? "Employment income" : "Personal savings",
+    fullName: intake?.applicantFullName ?? "",
+    nationality: intake?.applicantNationality ?? "",
+    residenceCountry: intake?.applicantResidenceCountry ?? "",
+    residenceCity: intake?.applicantResidenceCity ?? "",
+    employmentStatus: intake?.applicantEmploymentStatus ?? "",
+    employer: intake?.applicantEmployer ?? "",
+    jobTitle: intake?.applicantJobTitle ?? "",
+    purposeOfTravel: visaCase.travelPurpose,
+    destinationCountry: visaCase.destinationCountry,
+    destinationCity: intake?.destinationCity ?? "",
+    arrivalDate: intake?.arrivalDate ?? "",
+    departureDate: intake?.departureDate ?? "",
+    fundingSource: intake?.applicantEmployer ? "Employment income" : "Personal savings",
   };
 }
 
@@ -122,7 +123,7 @@ const outputSchema = z.object({
   confirmation_code: z.string().optional(),
   payment_confirmation: z.string().optional(),
   errors: z.array(z.string()).optional(),
-  case_state: z.unknown(),
+  case_view: z.unknown(),
 });
 
 export default defineTool({
@@ -132,7 +133,7 @@ export default defineTool({
   outputSchema,
   needsApproval: always(),
   async execute(input, ctx) {
-    const state = caseState.get();
+    const state = activeVisaCase.get();
     const userId = ctx.session.auth.current?.attributes.userId;
     const orgId = ctx.session.auth.current?.attributes.orgId;
 
@@ -148,14 +149,16 @@ export default defineTool({
       clerkOrgId: typeof orgId === "string" ? orgId : null,
       visaCaseId: state.visaCaseId,
     };
-    const portalUrl = input.portal_url ?? state.portalUrl;
+    const caseView = await getVisaCaseView(owner);
+    if (!caseView) throw new Error("Visa case not found for the authenticated user.");
+    const portalUrl = input.portal_url ?? caseView.caseSubmission?.portalUrl;
 
     if (!portalUrl) {
       throw new Error("No portal URL available. Ask the applicant for the official consular portal URL first.");
     }
 
     const safePortalUrl = assertSafePortalUrl(portalUrl);
-    const formData = generateFormData(state);
+    const formData = generateFormData(caseView);
     const preferredAppointment =
       input.preferred_appointment_start && input.preferred_appointment_end
         ? { start: input.preferred_appointment_start, end: input.preferred_appointment_end }
@@ -172,7 +175,7 @@ export default defineTool({
     });
     await appendEvent(owner, state.visaCaseId, {
       eventType: "portal_draft_requested",
-      fromStatus: state.status,
+      fromStatus: caseView.visaCase.internalStatus,
       toStatus: "portal_draft_requested",
       payload: { portalUrl: safePortalUrl },
     });
@@ -204,17 +207,7 @@ export default defineTool({
         payload: { liveViewAvailable: Boolean(liveViewUrl), formFieldsFilled: result.formFieldsFilled },
       });
 
-      caseState.update((s) => ({
-        ...s,
-        portalUrl: safePortalUrl,
-        status: result.status === "failed" ? "portal_draft_requested" : "portal_draft_ready",
-        candidateStatus: result.status === "failed" ? "action_needed" : "waiting_for_approval",
-        browserUseSessionId: sessionId,
-        submissionPreview: {
-          liveViewUrl,
-          ...result,
-        },
-      }));
+      const nextCaseView = await getVisaCaseView(owner);
 
       return {
         live_view_url: liveViewUrl,
@@ -227,7 +220,7 @@ export default defineTool({
         ...(result.confirmationCode ? { confirmation_code: result.confirmationCode } : {}),
         ...(result.paymentConfirmation ? { payment_confirmation: result.paymentConfirmation } : {}),
         ...(result.errors ? { errors: [...result.errors] } : {}),
-        case_state: caseState.get(),
+        case_view: nextCaseView,
       };
     } catch (error) {
       await upsertSubmission(owner, {

@@ -11,7 +11,7 @@ import { DocChecklist } from "./doc-checklist";
 import { ProgressRoute } from "./progress-route";
 
 function MobileCaseSummary() {
-  const { caseState, displayStepIndex, startNewCase } = useCasePage();
+  const { caseView, displayStepIndex, startNewCase } = useCasePage();
 
   return (
     <section className="border-b border-line bg-panel-dk px-4 py-3 min-[900px]:hidden" aria-label="Case summary">
@@ -19,7 +19,7 @@ function MobileCaseSummary() {
         <div>
           <div className="font-mono text-[8.5px] uppercase tracking-[0.22em] text-ink2">Case route</div>
           <div className="mt-1 text-sm font-semibold text-ink">
-            {caseState.destinationCountry || "Destination pending"}
+            {caseView.visaCase.destinationCountry || "Destination pending"}
           </div>
         </div>
         <Sheet>
@@ -27,7 +27,7 @@ function MobileCaseSummary() {
             <Button type="button" variant="outline" size="sm" className="btn h-auto">
               View case
               <Badge variant="secondary" className="ml-1 font-mono uppercase">
-                {caseState.documents.length} docs
+                {caseView.documents.length + caseView.coreDocuments.length} docs
               </Badge>
             </Button>
           </SheetTrigger>
@@ -38,10 +38,10 @@ function MobileCaseSummary() {
               </SheetTitle>
             </SheetHeader>
             <div className="flex flex-col gap-3 p-3">
-              <CaseStrip caseState={caseState} />
+              <CaseStrip caseView={caseView} />
               <ProgressRoute currentIndex={displayStepIndex} />
-              <DocChecklist documents={caseState.documents} />
-              <CaseFacts caseState={caseState} />
+              <DocChecklist caseView={caseView} />
+              <CaseFacts caseView={caseView} />
               <Button type="button" variant="outline" onClick={startNewCase} className="btn w-full">
                 ↻ NEW CASE
               </Button>
@@ -57,7 +57,7 @@ function MobileCaseSummary() {
 }
 
 export function CaseSidebar() {
-  const { caseState, displayStepIndex, startNewCase } = useCasePage();
+  const { caseView, displayStepIndex, startNewCase } = useCasePage();
 
   return (
     <>
@@ -74,10 +74,10 @@ export function CaseSidebar() {
         </div>
 
         <div className="flex flex-1 flex-col gap-3 p-3">
-          <CaseStrip caseState={caseState} />
+          <CaseStrip caseView={caseView} />
           <ProgressRoute currentIndex={displayStepIndex} />
-          <DocChecklist documents={caseState.documents} />
-          <CaseFacts caseState={caseState} />
+          <DocChecklist caseView={caseView} />
+          <CaseFacts caseView={caseView} />
         </div>
 
         <div className="border-t border-line p-3">

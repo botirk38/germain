@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../index";
 import { appendEvent } from "./events";
 import { createCandidateAction } from "./tasks";
-import { getVisaCase, getVisaCaseProjection, updateVisaCase } from "./visa-cases";
+import { getVisaCase, getVisaCaseView, updateVisaCase } from "./visa-cases";
 
 type DbOwner = Pick<typeof schema.visaCases.$inferInsert, "clerkUserId" | "clerkOrgId">;
 type OwnedVisaCase = DbOwner & { readonly visaCaseId: typeof schema.visaCases.$inferSelect.id };
@@ -72,7 +72,7 @@ export async function recordDocument(
     readonly storageKey?: string;
   },
 ) {
-  const projection = await getVisaCaseProjection(owner);
+  const projection = await getVisaCaseView(owner);
   if (!projection) return null;
 
   const matchingRequirement = projection.documentRequirements.find(
@@ -112,6 +112,30 @@ export async function recordDocument(
     visibleToCandidate: true,
     payload: { documentType: created.documentType, originalFilename: created.originalFilename },
   });
+
+  return created;
+}
+
+export async function recordUserDocument(
+  owner: DbOwner,
+  document: {
+    readonly documentType: typeof schema.documentTypeEnum.enumValues[number];
+    readonly originalFilename: string;
+    readonly storageKey?: string;
+  },
+) {
+  const db = getDb();
+  const [created] = await db
+    .insert(schema.userDocuments)
+    .values({
+      clerkUserId: owner.clerkUserId,
+      clerkOrgId: owner.clerkOrgId ?? null,
+      documentType: document.documentType,
+      originalFilename: document.originalFilename,
+      storageKey: document.storageKey,
+      metadata: { metadataOnly: !document.storageKey },
+    })
+    .returning();
 
   return created;
 }

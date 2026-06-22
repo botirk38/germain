@@ -3,18 +3,18 @@
 import { useCallback, useState } from "react";
 import { useEveAgent } from "eve/react";
 import type { HandleMessageStreamEvent, SendTurnPayload } from "eve/client";
-import type { CaseState } from "@/components/attache/case-types";
+import type { VisaCaseView } from "@/lib/db/queries";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function caseStateFromEvent(event: HandleMessageStreamEvent): CaseState | undefined {
+function caseViewFromEvent(event: HandleMessageStreamEvent): VisaCaseView | undefined {
   if (event.type !== "action.result") return undefined;
   const result = event.data.result;
   if (result.kind !== "tool-result" || !isRecord(result.output)) return undefined;
-  const value = result.output.case_state;
-  return isRecord(value) ? (value as CaseState) : undefined;
+  const value = result.output.case_view;
+  return isRecord(value) ? (value as unknown as VisaCaseView) : undefined;
 }
 
 function withCaseContext(input: SendTurnPayload, caseId: string): SendTurnPayload {
@@ -25,8 +25,8 @@ function withCaseContext(input: SendTurnPayload, caseId: string): SendTurnPayloa
   return { ...input, clientContext: { ...current, visaCaseId: caseId } };
 }
 
-export function useAttacheAgent({ caseId, initialCaseState }: { readonly caseId: string; readonly initialCaseState: CaseState }) {
-  const [caseState, setCaseState] = useState<CaseState>(initialCaseState);
+export function useAttacheAgent({ caseId, initialCaseView }: { readonly caseId: string; readonly initialCaseView: VisaCaseView }) {
+  const [caseView, setCaseView] = useState<VisaCaseView>(initialCaseView);
 
   const prepareSend = useCallback(
     (input: SendTurnPayload) => withCaseContext(input, caseId),
@@ -36,19 +36,19 @@ export function useAttacheAgent({ caseId, initialCaseState }: { readonly caseId:
   const agent = useEveAgent({
     prepareSend,
     onEvent(event) {
-      const nextCaseState = caseStateFromEvent(event);
-      if (nextCaseState) setCaseState(nextCaseState);
+      const nextCaseView = caseViewFromEvent(event);
+      if (nextCaseView) setCaseView(nextCaseView);
     },
   });
 
   const reset = useCallback(() => {
-    setCaseState(initialCaseState);
+    setCaseView(initialCaseView);
     agent.reset();
-  }, [agent, initialCaseState]);
+  }, [agent, initialCaseView]);
 
   return {
     ...agent,
-    caseState,
+    caseView,
     reset,
   };
 }

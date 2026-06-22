@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { recordDocument } from "@/lib/db/queries";
-import { caseState, documentTypeSchema } from "../lib/state";
+import { getVisaCaseView, recordDocument } from "@/lib/db/queries";
+import { activeVisaCase, documentTypeSchema } from "../lib/state";
 
 const inputSchema = z.object({
   documents: z.array(
@@ -16,7 +16,7 @@ const inputSchema = z.object({
 const outputSchema = z.object({
   recorded: z.array(documentTypeSchema),
   remaining_requested: z.array(documentTypeSchema),
-  case_state: z.unknown(),
+  case_view: z.unknown(),
 });
 
 export default defineTool({
@@ -25,7 +25,7 @@ export default defineTool({
   inputSchema,
   outputSchema,
   async execute({ documents }, ctx) {
-    const current = caseState.get();
+    const current = activeVisaCase.get();
     const clerkUserId = ctx.session.auth.current?.attributes.userId;
     const clerkOrgId = ctx.session.auth.current?.attributes.orgId;
 
@@ -36,6 +36,13 @@ export default defineTool({
       throw new Error("Load a visa case before recording documents.");
     }
     const visaCaseId = current.visaCaseId;
+    const owner = {
+      clerkUserId,
+      clerkOrgId: typeof clerkOrgId === "string" ? clerkOrgId : null,
+      visaCaseId,
+    };
+    const caseView = await getVisaCaseView(owner);
+    if (!caseView) throw new Error("Visa case not found for the authenticated user.");
 
     const recordedDocuments = await Promise.all(
       documents.map((document) => {
@@ -43,11 +50,7 @@ export default defineTool({
         if (!originalFilename) throw new Error("Document filename is required.");
 
         return recordDocument(
-          {
-            clerkUserId,
-            clerkOrgId: typeof clerkOrgId === "string" ? clerkOrgId : null,
-            visaCaseId,
-          },
+          owner,
           {
             documentType: document.type,
             originalFilename,
@@ -62,33 +65,15 @@ export default defineTool({
     );
     const recordedTypes = addedDocuments.map((document) => document.documentType);
     const recordedTypeSet = new Set(recordedTypes);
-    const remainingRequested = current.documentRequirements
-      .filter((requirement) => requirement.status === "requested" && !recordedTypeSet.has(requirement.type))
-      .map((requirement) => requirement.type);
-
-    caseState.update((s) => ({
-      ...s,
-      documents: [
-        ...s.documents,
-        ...addedDocuments.map((document) => ({
-          id: document.id,
-          type: document.documentType,
-          name: document.originalFilename,
-          status: document.status,
-          storageKey: document.storageKey ?? undefined,
-        })),
-      ],
-      documentRequirements: s.documentRequirements.map((requirement) =>
-        recordedTypeSet.has(requirement.type) ? { ...requirement, status: "satisfied" as const } : requirement,
-      ),
-      status: remainingRequested.length === 0 ? "documents_received" : "documents_partially_received",
-      candidateStatus: remainingRequested.length === 0 ? "reviewing_documents" : "waiting_for_documents",
-    }));
+    const remainingRequested = caseView.documentRequirements
+      .filter((requirement) => requirement.status === "requested" && !recordedTypeSet.has(requirement.documentType))
+      .map((requirement) => requirement.documentType);
+    const nextCaseView = await getVisaCaseView(owner);
 
     return {
       recorded: recordedTypes,
       remaining_requested: remainingRequested,
-      case_state: caseState.get(),
+      case_view: nextCaseView,
     };
   },
   toModelOutput(output) {
