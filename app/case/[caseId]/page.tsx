@@ -4,9 +4,7 @@ import { initialCaseState } from "@/components/attache/initial-states";
 import type { CaseState, Recommendation } from "@/components/attache/case-types";
 import { CaseComposer } from "@/components/pages/case/composer";
 import { CaseConversation } from "@/components/pages/case/conversation";
-import { CaseError } from "@/components/pages/case/error";
 import { CaseHeader } from "@/components/pages/case/header";
-import { CaseMobileSummary } from "@/components/pages/case/mobile-summary";
 import { CasePageProvider } from "@/components/pages/case/provider";
 import { CaseSidebar } from "@/components/pages/case/sidebar";
 import { getVisaCaseProjection } from "@/lib/db/queries";
@@ -135,9 +133,7 @@ export default async function VisaCasePage({ params }: { readonly params: Promis
         <CaseSidebar />
         <main className="flex min-w-0 flex-1 flex-col">
           <CaseHeader />
-          <CaseMobileSummary />
           <CaseConversation />
-          <CaseError />
           <CaseComposer />
         </main>
       </div>

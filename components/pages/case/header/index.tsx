@@ -1,8 +1,16 @@
 "use client";
 
-import { CautionLamp } from "@/components/pages/case/caution-lamp";
-import { SplitFlap } from "@/components/pages/case/split-flap";
 import { useCasePage } from "@/hooks/case/use-case-page";
+import { SplitFlap } from "./split-flap";
+
+function CautionLamp({ on }: { readonly on: boolean }) {
+  return (
+    <div className={on ? "mcaution on" : "mcaution"}>
+      <span className="sq" />
+      ACTION NEEDED
+    </div>
+  );
+}
 
 export function CaseHeader() {
   const { actionNeeded, caseState } = useCasePage();

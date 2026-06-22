@@ -3,7 +3,7 @@
 import type { EveMessage, InputResponse } from "eve/client";
 import { Fragment } from "react";
 import { Markdown } from "@/components/attache/Markdown";
-import { DynamicToolPart } from "@/components/pages/case/tool-card";
+import { DynamicToolPart } from "./tool-card";
 
 type UploadedDocument = {
   readonly id: string;

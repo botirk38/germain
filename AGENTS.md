@@ -21,6 +21,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - If a page component has meaningful subcomponents, put them in a folder named after that component. Do not add grouping folders like `console/` unless there is an actual `Console` component boundary.
 - Do not prefix filenames with the page name when the folder already provides that context. Prefer `components/pages/landing/hero.tsx` over `landing-hero.tsx`.
 - Shared reusable primitives belong under `components/ui/`. Product-theme primitives shared across multiple Attaché surfaces belong under `components/attache/`. Components used by only one page stay inside that page folder.
+- Before creating custom UI markup, check installed shadcn components and registry docs. Add official shadcn components with `bunx --bun shadcn@latest add <component>` and compose them first; reserve custom components for product-specific visuals or behavior that shadcn does not cover.
 - Delete unused components rather than preserving compatibility shims. This repository does not keep backward-compatibility layers unless there is a concrete external consumer.
 
 ## Hook Organization

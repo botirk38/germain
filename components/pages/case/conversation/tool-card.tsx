@@ -7,6 +7,7 @@ import { FileUpload } from "@/components/attache/FileUpload";
 import { KeyButton } from "@/components/attache/KeyButton";
 import { MachinePanel } from "@/components/attache/MachinePanel";
 import { StatusMark } from "@/components/attache/StatusMark";
+import { Button } from "@/components/ui/button";
 
 type UploadedDocument = {
   readonly id: string;
@@ -146,14 +147,15 @@ function ApprovalCard({
             </KeyButton>
           ) : null}
           {denyOption ? (
-            <button
+            <Button
               type="button"
+              variant="outline"
               className="btn"
               style={{ background: "transparent", border: "1px solid var(--clay)", color: "var(--clay)" }}
               onClick={() => onInputResponse({ requestId: request.requestId, optionId: denyOption.id })}
             >
               {denyOption.label.toUpperCase()}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>

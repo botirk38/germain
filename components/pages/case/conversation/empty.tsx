@@ -3,6 +3,8 @@
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
 import { StatusMark } from "@/components/attache/StatusMark";
 import type { StatusWord } from "@/components/attache/display";
+import { Button } from "@/components/ui/button";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 
 interface EmptyStateProps {
   onSuggestion: (text: string) => void;
@@ -34,8 +36,8 @@ const VOCAB_WORDS: StatusWord[] = [
 
 export function EmptyState({ onSuggestion }: EmptyStateProps) {
   return (
-    <div className="h-full flex flex-col items-center justify-center px-4">
-      <div className="flex flex-col items-center text-center max-w-xl">
+    <Empty className="h-full border-none px-4">
+      <EmptyHeader className="max-w-xl">
         {/* Monogram + wordmark */}
         <MonogramLogo size={64} title="Attaché" />
         <span className="wordmark mt-5">
@@ -47,33 +49,36 @@ export function EmptyState({ onSuggestion }: EmptyStateProps) {
         <p className="kicker mt-6">AI VISA AGENT</p>
 
         {/* Heading + description */}
-        <h1 className="text-3xl font-bold mt-3">Ready when you are.</h1>
-        <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ink2">
+        <EmptyTitle className="mt-3 text-3xl font-bold text-ink">Ready when you are.</EmptyTitle>
+        <EmptyDescription className="mt-3 max-w-md text-[15px] leading-relaxed text-ink2">
           Tell me where you&apos;re going and I&apos;ll handle the rest —
           documents, forms, appointments, and monitoring until you have a
           decision.
-        </p>
+        </EmptyDescription>
+      </EmptyHeader>
 
-        {/* Suggestion chips */}
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
+      <EmptyContent>
+        <div className="flex flex-wrap justify-center gap-2">
           {SUGGESTIONS.map((suggestion, index) => (
-            <button
+            <Button
               key={index}
+              type="button"
+              variant="outline"
+              size="sm"
               onClick={() => onSuggestion(suggestion.value)}
-              className="chip"
+              className="chip h-auto"
             >
               {suggestion.text}
-            </button>
+            </Button>
           ))}
         </div>
 
-        {/* Status vocabulary strip */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-line pt-4">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-line pt-4">
           {VOCAB_WORDS.map((word) => (
             <StatusMark key={word} word={word} className="text-[10.5px] tracking-[0.08em]" />
           ))}
         </div>
-      </div>
-    </div>
+      </EmptyContent>
+    </Empty>
   );
 }

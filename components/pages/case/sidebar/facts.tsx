@@ -1,6 +1,22 @@
 import type { CaseState } from "@/components/attache/case-types";
-import { ApprovalLikelihoodRing } from "@/components/pages/case/approval-likelihood-ring";
 import { ClRow } from "@/components/attache/Card";
+
+function ApprovalLikelihoodRing({ likelihood }: { readonly likelihood: number }) {
+  const pct = Math.max(0, Math.min(100, likelihood));
+  const angle = pct * 3.6;
+
+  return (
+    <div
+      className="relative grid size-[92px] place-items-center rounded-full font-mono"
+      style={{
+        background: `conic-gradient(var(--sage) ${angle}deg, var(--line) ${angle}deg)`,
+      }}
+    >
+      <div className="absolute inset-[8px] rounded-full bg-panel" />
+      <div className="relative text-2xl font-semibold text-ink">{pct}</div>
+    </div>
+  );
+}
 
 // Case file panel: approval ring + key facts as dotted-leader rows, then
 // unresolved recommendations (amber) and risk flags (clay). Empty sections
