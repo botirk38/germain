@@ -1,11 +1,11 @@
 "use client";
 
 import { MonogramLogo } from "@/components/attache/MonogramLogo";
-import { CaseFacts } from "@/components/console/CaseFacts";
-import { CaseStrip } from "@/components/console/CaseStrip";
-import { DocChecklist } from "@/components/console/DocChecklist";
-import { ProgressRoute } from "@/components/console/ProgressRoute";
-import { useCasePage } from "@/components/pages/case/case-page-provider";
+import { CaseFacts } from "@/components/pages/case/facts";
+import { CaseStrip } from "@/components/pages/case/strip";
+import { DocChecklist } from "@/components/pages/case/doc-checklist";
+import { ProgressRoute } from "@/components/pages/case/progress-route";
+import { useCasePage } from "@/hooks/case/use-case-page";
 
 export function CaseSidebar() {
   const { caseState, displayStepIndex, startNewCase } = useCasePage();

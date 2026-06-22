@@ -2,8 +2,8 @@
 
 import type { EveMessage, InputResponse } from "eve/client";
 import { Fragment } from "react";
-import { Markdown } from "./attache/Markdown";
-import { DynamicToolPart } from "./ToolCard";
+import { Markdown } from "@/components/attache/Markdown";
+import { DynamicToolPart } from "@/components/pages/case/tool-card";
 
 type UploadedDocument = {
   readonly id: string;

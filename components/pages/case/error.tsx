@@ -1,6 +1,6 @@
 "use client";
 
-import { useCasePage } from "@/components/pages/case/case-page-provider";
+import { useCasePage } from "@/hooks/case/use-case-page";
 
 export function CaseError() {
   const { agent } = useCasePage();

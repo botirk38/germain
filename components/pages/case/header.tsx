@@ -1,8 +1,8 @@
 "use client";
 
-import { CautionLamp } from "@/components/console/CautionLamp";
-import { SplitFlap } from "@/components/console/SplitFlap";
-import { useCasePage } from "@/components/pages/case/case-page-provider";
+import { CautionLamp } from "@/components/pages/case/caution-lamp";
+import { SplitFlap } from "@/components/pages/case/split-flap";
+import { useCasePage } from "@/hooks/case/use-case-page";
 
 export function CaseHeader() {
   const { actionNeeded, caseState } = useCasePage();

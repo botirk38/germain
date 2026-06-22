@@ -1,7 +1,7 @@
 "use client";
 
-import { ProgressRoute } from "@/components/console/ProgressRoute";
-import { useCasePage } from "@/components/pages/case/case-page-provider";
+import { ProgressRoute } from "@/components/pages/case/progress-route";
+import { useCasePage } from "@/hooks/case/use-case-page";
 
 export function CaseMobileSummary() {
   const { caseState, displayStepIndex } = useCasePage();

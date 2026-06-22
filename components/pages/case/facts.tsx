@@ -1,5 +1,5 @@
 import type { CaseState } from "@/components/attache/case-types";
-import { ApprovalLikelihoodRing } from "@/components/ApprovalLikelihoodRing";
+import { ApprovalLikelihoodRing } from "@/components/pages/case/approval-likelihood-ring";
 import { ClRow } from "@/components/attache/Card";
 
 // Case file panel: approval ring + key facts as dotted-leader rows, then

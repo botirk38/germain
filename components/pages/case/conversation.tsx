@@ -1,8 +1,8 @@
 "use client";
 
-import { ChatMessages } from "@/components/ChatMessages";
-import { EmptyState } from "@/components/EmptyState";
-import { useCasePage } from "@/components/pages/case/case-page-provider";
+import { ChatMessages } from "@/components/pages/case/chat-messages";
+import { EmptyState } from "@/components/pages/case/empty-state";
+import { useCasePage } from "@/hooks/case/use-case-page";
 
 export function CaseConversation() {
   const { agent, recordDocuments, respondToInput, sendText } = useCasePage();

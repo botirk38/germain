@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { useCasePage } from "@/components/pages/case/case-page-provider";
+import { useCasePage } from "@/hooks/case/use-case-page";
 
 export function CaseComposer() {
   const { pendingHumanInput, requestBusy, sendText } = useCasePage();
