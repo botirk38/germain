@@ -29,11 +29,11 @@ async function uploadDocument(document: UploadedDocument): Promise<UploadedDocum
   formData.set("file", document.file);
   formData.set("documentType", document.type);
   const response = await fetch("/api/uploads", { method: "POST", body: formData });
-  const body = (await response.json()) as { url?: unknown; error?: unknown };
-  if (!response.ok || typeof body.url !== "string") {
+  const body = (await response.json()) as { pathname?: unknown; error?: unknown };
+  if (!response.ok || typeof body.pathname !== "string") {
     throw new Error(typeof body.error === "string" ? body.error : `Could not upload ${document.name}.`);
   }
-  return { ...document, storageKey: body.url };
+  return { ...document, storageKey: body.pathname };
 }
 
 export function CasePageProvider({
@@ -87,7 +87,7 @@ export function CasePageProvider({
 
   const startNewCase = () => {
     agent.reset();
-    router.push("/onboarding");
+    router.push("/visas");
   };
 
   return (

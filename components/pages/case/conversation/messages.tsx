@@ -14,6 +14,7 @@ import { DynamicToolPart } from "./tool-card";
 interface ChatMessagesProps {
   readonly messages: readonly EveMessage[];
   readonly status: string;
+  readonly isSubmitting: boolean;
   readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
   readonly onInputResponse: (response: InputResponse) => void;
 }
@@ -32,7 +33,7 @@ function hasVisibleContent(message: EveMessage): boolean {
   });
 }
 
-export function ChatMessages({ messages, status, onDocuments, onInputResponse }: ChatMessagesProps) {
+export function ChatMessages({ messages, status, isSubmitting, onDocuments, onInputResponse }: ChatMessagesProps) {
   return (
     <Conversation className="h-full">
       <ConversationContent className="feed gap-0 p-0">
@@ -60,6 +61,7 @@ export function ChatMessages({ messages, status, onDocuments, onInputResponse }:
                         <DynamicToolPart
                           key={key}
                           part={part}
+                          isSubmitting={isSubmitting}
                           onDocuments={onDocuments}
                           onInputResponse={onInputResponse}
                         />

@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { findEnabledVisaOption, visaSelectionSchema } from "@/lib/db/visa-selection";
-import { createVisaCase } from "@/lib/db/queries";
+import { createVisaCase, hasUserDocument } from "@/lib/db/queries";
 
 export async function POST(request: Request) {
   const { userId, orgId } = await auth();
@@ -17,6 +17,11 @@ export async function POST(request: Request) {
   const option = findEnabledVisaOption(parsed.data);
   if (!option) {
     return Response.json({ error: "Visa route is not available yet" }, { status: 400 });
+  }
+
+  const hasPassport = await hasUserDocument({ clerkUserId: userId, clerkOrgId: orgId }, "passport");
+  if (!hasPassport) {
+    return Response.json({ error: "Upload your passport before creating a visa case" }, { status: 400 });
   }
 
   const view = await createVisaCase({ clerkUserId: userId, clerkOrgId: orgId }, {

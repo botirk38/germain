@@ -12,16 +12,16 @@ interface EmptyStateProps {
 
 const SUGGESTIONS = [
   {
-    text: "Tourist visa — US to Germany",
-    value: "I need a tourist visa for Germany. I'm a US citizen planning to visit Berlin for a week in January.",
+    text: "France visitor visa — first trip",
+    value: "I need a France Schengen short-stay visitor visa for tourism. I'm planning a one-week trip to Paris.",
   },
   {
-    text: "Business visa — conference in Frankfurt",
-    value: "I need a business visa for a conference in Frankfurt. I work for a tech company.",
+    text: "France tourism — documents",
+    value: "I'm applying for a France Schengen visitor visa for tourism. What documents should I prepare first?",
   },
   {
-    text: "Student visa — studying abroad",
-    value: "I'm applying for a student visa to study in Germany. What documents do I need?",
+    text: "France short stay — timeline",
+    value: "I want to visit France for fewer than 90 days. Can you help me understand the timeline and next steps?",
   },
 ];
 

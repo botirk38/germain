@@ -48,6 +48,9 @@ export default defineTool({
       documents.map((document) => {
         const originalFilename = document.name;
         if (!originalFilename) throw new Error("Document filename is required.");
+        if (document.storage_key && !document.storage_key.startsWith(`documents/${clerkUserId}/`)) {
+          throw new Error("Document storage key does not belong to the authenticated user.");
+        }
 
         return recordDocument(
           owner,

@@ -17,11 +17,18 @@ export async function POST(request: Request) {
     return Response.json({ error: "Passport upload is required" }, { status: 400 });
   }
 
-  await recordUserDocument({ clerkUserId: userId, clerkOrgId: orgId }, {
-    documentType: "passport",
-    originalFilename: parsed.data.passportOriginalFilename,
-    storageKey: parsed.data.passportStorageKey,
-  });
+  try {
+    await recordUserDocument({ clerkUserId: userId, clerkOrgId: orgId }, {
+      documentType: "passport",
+      originalFilename: parsed.data.passportOriginalFilename,
+      storageKey: parsed.data.passportStorageKey,
+    });
+  } catch (cause) {
+    return Response.json(
+      { error: cause instanceof Error ? cause.message : "Could not save passport record" },
+      { status: 400 },
+    );
+  }
 
   return Response.json({ nextUrl: "/visas" });
 }

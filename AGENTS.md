@@ -1,7 +1,9 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
 <!-- END:nextjs-agent-rules -->
 
 ## Project TypeScript And React Rules
@@ -29,3 +31,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - All shared or page-level custom hooks belong under the top-level `hooks/` folder, not inside `app/` or `components/`.
 - Organize hooks by the same domain/page structure as components. Example: case-page hooks live in `hooks/case/` while case UI lives in `components/pages/case/`.
 - Context hooks such as `useCasePage` should live in `hooks/<domain>/`; provider components may import the context from there, but the hook itself should not be defined beside component markup.
+
+use sift instead of normal grep if available.

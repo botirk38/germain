@@ -21,7 +21,7 @@ function ConversationError() {
 }
 
 export function CaseConversation() {
-  const { agent, recordDocuments, respondToInput, sendText } = useCasePage();
+  const { agent, recordDocuments, requestBusy, respondToInput, sendText } = useCasePage();
   const messages = agent.data.messages;
 
   return (
@@ -32,6 +32,7 @@ export function CaseConversation() {
         <ChatMessages
           messages={messages}
           status={agent.status}
+          isSubmitting={requestBusy}
           onDocuments={recordDocuments}
           onInputResponse={respondToInput}
         />

@@ -12,6 +12,7 @@ import type { UploadedDocument } from "@/hooks/case/use-case-page";
 
 type DynamicToolPartProps = {
   readonly part: EveDynamicToolPart;
+  readonly isSubmitting: boolean;
   readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
   readonly onInputResponse: (response: InputResponse) => void;
 };
@@ -159,9 +160,11 @@ function ApprovalCard({
 
 function RequestDocumentsOutput({
   output,
+  isSubmitting,
   onDocuments,
 }: {
   readonly output: JsonRecord;
+  readonly isSubmitting: boolean;
   readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
 }) {
   const requestedTypes = stringArrayField(output, "requested_types");
@@ -187,7 +190,7 @@ function RequestDocumentsOutput({
     <FileUpload
       requiredTypes={pendingTypes}
       criticalDocuments={pendingTypes.slice(0, 3)}
-      isSubmitting={false}
+      isSubmitting={isSubmitting}
       onUpload={onDocuments}
     />
   );
@@ -196,15 +199,17 @@ function RequestDocumentsOutput({
 function ServerToolOutput({
   toolName,
   output,
+  isSubmitting,
   onDocuments,
 }: {
   readonly toolName: string;
   readonly output: JsonRecord;
+  readonly isSubmitting: boolean;
   readonly onDocuments: (documents: readonly UploadedDocument[]) => void;
 }) {
   switch (toolName) {
     case "request_documents":
-      return <RequestDocumentsOutput output={output} onDocuments={onDocuments} />;
+      return <RequestDocumentsOutput output={output} isSubmitting={isSubmitting} onDocuments={onDocuments} />;
 
     case "record_documents": {
       const recorded = stringArrayField(output, "recorded");
@@ -267,7 +272,7 @@ function ServerToolOutput({
   }
 }
 
-export function DynamicToolPart({ part, onDocuments, onInputResponse }: DynamicToolPartProps) {
+export function DynamicToolPart({ part, isSubmitting, onDocuments, onInputResponse }: DynamicToolPartProps) {
   const header = headerFor(part.toolName);
 
   switch (part.state) {
@@ -283,6 +288,13 @@ export function DynamicToolPart({ part, onDocuments, onInputResponse }: DynamicT
     case "output-denied":
       return <ToolSkippedCard header={header} errorText={part.approval.reason} />;
     case "output-available":
-      return <ServerToolOutput toolName={part.toolName} output={outputRecord(part.output)} onDocuments={onDocuments} />;
+      return (
+        <ServerToolOutput
+          toolName={part.toolName}
+          output={outputRecord(part.output)}
+          isSubmitting={isSubmitting}
+          onDocuments={onDocuments}
+        />
+      );
   }
 }

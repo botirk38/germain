@@ -1,5 +1,6 @@
 import { put } from "@vercel/blob";
 import { auth } from "@clerk/nextjs/server";
+import { schema } from "@/lib/db";
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
@@ -13,6 +14,11 @@ function safeFilename(name: string): string {
     .replace(/[^a-zA-Z0-9._-]+/g, "-")
     .replace(/-+/g, "-")
     .slice(0, 180) || "document";
+}
+
+function isDocumentType(value: FormDataEntryValue | null): value is typeof schema.documentTypeEnum.enumValues[number] {
+  const documentTypes: readonly string[] = schema.documentTypeEnum.enumValues;
+  return typeof value === "string" && documentTypes.includes(value);
 }
 
 export async function POST(request: Request) {
@@ -37,14 +43,14 @@ export async function POST(request: Request) {
   if (!isAllowedFile(file)) {
     return Response.json({ error: "Upload a PDF or image file" }, { status: 400 });
   }
-  if (typeof documentType !== "string" || documentType.trim().length === 0) {
-    return Response.json({ error: "Document type is required" }, { status: 400 });
+  if (!isDocumentType(documentType)) {
+    return Response.json({ error: "Document type is invalid" }, { status: 400 });
   }
 
   const pathname = [
     "documents",
     userId,
-    documentType.replace(/[^a-zA-Z0-9_-]+/g, "-"),
+    documentType,
     `${crypto.randomUUID()}-${safeFilename(file.name)}`,
   ].join("/");
 

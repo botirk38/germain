@@ -33,8 +33,8 @@ export function Form() {
       method: "POST",
       body: uploadFormData,
     });
-    const uploadBody = (await uploadResponse.json()) as { url?: unknown; originalFilename?: unknown; error?: unknown };
-    if (!uploadResponse.ok || typeof uploadBody.url !== "string") {
+    const uploadBody = (await uploadResponse.json()) as { pathname?: unknown; originalFilename?: unknown; error?: unknown };
+    if (!uploadResponse.ok || typeof uploadBody.pathname !== "string") {
       form.setError("root", {
         message: typeof uploadBody.error === "string" ? uploadBody.error : "Could not upload your passport. Please try again.",
       });
@@ -48,7 +48,7 @@ export function Form() {
         ...values,
         passportOriginalFilename:
           typeof uploadBody.originalFilename === "string" ? uploadBody.originalFilename : values.passportOriginalFilename,
-        passportStorageKey: uploadBody.url,
+        passportStorageKey: uploadBody.pathname,
       }),
     });
 

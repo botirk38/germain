@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../index";
 import { appendEvent } from "./events";
 import { createCandidateAction } from "./tasks";
@@ -6,6 +6,10 @@ import { getVisaCase, getVisaCaseView, updateVisaCase } from "./visa-cases";
 
 type DbOwner = Pick<typeof schema.visaCases.$inferInsert, "clerkUserId" | "clerkOrgId">;
 type OwnedVisaCase = DbOwner & { readonly visaCaseId: typeof schema.visaCases.$inferSelect.id };
+
+export function isOwnedStorageKey(owner: DbOwner, storageKey: string): boolean {
+  return storageKey.startsWith(`documents/${owner.clerkUserId}/`);
+}
 
 function requirementLabel(type: typeof schema.documentTypeEnum.enumValues[number]): string {
   return type
@@ -25,6 +29,7 @@ export async function createDocumentRequirements(
 ) {
   const visaCase = await getVisaCase(owner);
   if (!visaCase) return [];
+  if (requirements.length === 0) return [];
 
   const db = getDb();
   const inserted = await db
@@ -74,6 +79,9 @@ export async function recordDocument(
 ) {
   const projection = await getVisaCaseView(owner);
   if (!projection) return null;
+  if (document.storageKey && !isOwnedStorageKey(owner, document.storageKey)) {
+    throw new Error("Document storage key does not belong to the authenticated user.");
+  }
 
   const matchingRequirement = projection.documentRequirements.find(
     (requirement) => requirement.documentType === document.documentType && requirement.status === "requested",
@@ -124,6 +132,10 @@ export async function recordUserDocument(
     readonly storageKey?: string;
   },
 ) {
+  if (document.storageKey && !isOwnedStorageKey(owner, document.storageKey)) {
+    throw new Error("Document storage key does not belong to the authenticated user.");
+  }
+
   const db = getDb();
   const [created] = await db
     .insert(schema.userDocuments)
@@ -138,4 +150,21 @@ export async function recordUserDocument(
     .returning();
 
   return created;
+}
+
+export async function hasUserDocument(
+  owner: DbOwner,
+  documentType: typeof schema.documentTypeEnum.enumValues[number],
+) {
+  const db = getDb();
+  const [document] = await db
+    .select({ id: schema.userDocuments.id })
+    .from(schema.userDocuments)
+    .where(and(
+      eq(schema.userDocuments.clerkUserId, owner.clerkUserId),
+      eq(schema.userDocuments.documentType, documentType),
+    ))
+    .limit(1);
+
+  return Boolean(document);
 }

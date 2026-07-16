@@ -235,7 +235,7 @@ export function FileUpload({
       ) : null}
 
       <div style={{ paddingTop: 12 }}>
-        <KeyButton onClick={submit} disabled={!canSubmit} submittingLabel="UPLOADING…">
+        <KeyButton onClick={submit} disabled={!canSubmit} submittingLabel={isSubmitting ? "UPLOADING…" : undefined}>
           {attachedCount === requiredTypes.length ? "UPLOAD ALL DOCUMENTS" : "UPLOAD DOCUMENTS"}
         </KeyButton>
         {missingCritical.length > 0 ? (

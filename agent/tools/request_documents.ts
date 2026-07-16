@@ -43,6 +43,16 @@ export default defineTool({
     const existingTypes = new Set(caseView.documentRequirements.map((requirement) => requirement.documentType));
     const requested = document_types.filter((type) => !existingTypes.has(type));
 
+    if (requested.length === 0) {
+      return {
+        requested_types: requested,
+        reason,
+        guidance,
+        total_pending: caseView.documentRequirements.filter((requirement) => requirement.status === "requested").length,
+        case_view: caseView,
+      };
+    }
+
     const requirements = await createDocumentRequirements(
       {
         clerkUserId,
@@ -61,7 +71,8 @@ export default defineTool({
       requested_types: requested,
       reason,
       guidance,
-      total_pending: caseView.documentRequirements.length + requirements.length,
+      total_pending:
+        caseView.documentRequirements.filter((requirement) => requirement.status === "requested").length + requirements.length,
       case_view: nextCaseView,
     };
   },
